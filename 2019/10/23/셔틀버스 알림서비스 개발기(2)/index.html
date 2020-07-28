@@ -1,0 +1,569 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+    
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="generator" content="사다리타기">
+    <title>젠킨스와 도커를 이용한 셔틀버스 알림 서비스 개발기(2) - 사다리타기</title>
+    <meta name="author" content="zerogyun">
+    <link rel="canonical" href="https://zerogyun.dev/2019/10/23/셔틀버스 알림서비스 개발기(2)/">
+    
+    
+    
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"zerogyun","sameAs":["https://github.com/cxz7720","mailto:admin@zerogyun.dev"],"image":"https://avatars1.githubusercontent.com/u/29659112?s=460&v=4"},"articleBody":"\n\n실제 서비스의 문제방화벽을 넘어서..현재 서비스되고 있는 API 컨테이너는 단과대학 소속 학회방에있는 서버 컴퓨터에서 학교 인터넷망에 연결되어 운영되고 있습니다.\n학교 내부망에서 동작하고 있는 서버다 보니 Well-Known Ports 를 제외하고는 다른 포트를 사용할 수 없다는 치명적인 문제가 발생하였습니다.\n\n위쪽 Portainer 캡쳐 이미지를 보셔서 짐작하실 수 있겠지만, 현재 학회 서버로 운영중인 서비스가 약 5~6개 정도 되며, 저희 프로젝트만을 위해 학회 공식 홈페이지를 서비스 하고 있는 80 포트와 443 포트를 강탈할 수는 없는 노릇이죠.\n사실 이전부터 대두되었던 문제입니다만, 라즈베리파이를 연결하여 외부에서 사용하고자 하거나, MariaDB를 도커 컨테이너로 올려 수업중에 다른 강의실에서 연결하고자 할 경우에도 공식적으로 열려있는 포트 이외의 조금이라도 특이한 포트들은 모두 방화벽에서 In/Out 모두 차단해버리곤 했습니다\n이전 까지만 해도 담당 지도교수님께 찾아가 직접 자필 서명을 받고, 방화벽 해제 신청서를 학과 사무실에 제출해서 승인처리가 되어야 저희가 사용하는 IP에 대하여 특정 포트의 방화벽이 해제되는 정책이었습니다.\n중간 관리자나 교수님 입장에서 매번 서류작업을 한다는 것은 상당히 성가신 일입니다.물론 사용하고자 하는 포트를 한번에 적어서 범위로 신청하는것도 방법이지만, 어째서인지 지난번 신청 당시 그렇게 했음에도 적용이 되지 않은 케이스가 몇개 발견되어 상당히 고된 삽질을 했던것으로 기억합니다.\nNginX 리버스프록시 : 우리는 언젠가 결국 답을 찾을 것이다.열혈 구글링 끝에 리버스프록시 라는 기술에 대하여 알게되었습니다.\nNginx 나 Apache가 일종의 신호등 역할을 하여 Domain을 기준으로 판별하여 내부 서비스 포트로 매칭을 시켜주는 기능 입니다.자세한 내용은 아래 그림을 참조하시면 쉽게 이해할 수 있습니다.\n\nhttp 통신의 기본 포트인 80과 HTTPS 통신을 위한 443 포트로 모든 Inbound 연결이 들어옵니다.Nginx 를 역시 도커 컨테이너 형태로 띄워서 -p 80:80, 443:443 옵션을 주어 Host OS와 연결시켜둡니다.\n사실 외부 인터넷과 Nginx 컨테이너가 구동되고 있는 Host 컴퓨터 사이에는 공유기가 있기 때문에 공유기에서 포트포워딩을 통해 서버컴퓨터로 80포트와 443 포트를 바라보도록 설정하였습니다.\nNginX Proxy Manager 를 이용하여 리버스 프록시 구현구글링을 통해 나오는 NginX 리버스프록시 강좌는 무수히 많았지만 모두가 조금씩 다른 설정 파일을 만들어서 사용하고 있었습니다. 조금씩 비슷하긴 했지만 어떻게 설정해야 우리의 환경에 적합한지 한참 고민하고 있었는데요, NginX 설정을 보다 쉽게 Web UI 를 통해 할 수 있게 도와주는 좋은 프로젝트가 있어서 직접 사용해보았습니다.\nNginx Proxy Manager\n저희 팀이 선택한 해결책입니다. 가장 마음에 들었던 부분은 이 서비스 역시 도커를 통해서 배포되고 있다는 점이었죠.(기승전 도커)\n컨테이너 구축설치 방법은 쉽습니다. docker-compose 명령어를 이용해 미리 작성된 파일을 이용해 설치하면 됩니다.\n다만 저는 Bridge 네트워크를 사용하기 위해 docker-compose.yml 파일의 각 컨테이너 세부설정에 Network: Bridge 라는 구문을 추가해 주었습니다.이 docker-compose를 이용하여 컨테이너를 가동할 경우 web_example1 이라는 컨테이너와 db_example1 이라는 두 개의 컨테이너가 동시에 가동됩니다. web 컨테이너의 경우 DB 컨테이너와 정상적으로 Connect 되어야 Healthy 판정을 받습니다.\n제 경우에는 docker-compose.yml Bridge Network 모드로 강제로 설정해서 그런지 DB 컨테이너를 찾지 못하는 증상이 있어서 수동으로 컨테이너에 접속하여 config 파일을 DB 컨테이너에 할당된 도커 IP대역으로 변경해주었습니다. (제 경우에는 172.17.0.X 대역으로 잡혔습니다.)\n깃허브 소스에서 docker-compose.yml 파일과 같은 경로에 있는 config.json이 DB연결시에 사용되는 설정값을 담고 있습니다.\n12345678910&#123;  \"database\": &#123;    \"engine\": \"mysql\",    \"host\": \"db\",    \"name\": \"npm\",    \"user\": \"npm\",    \"password\": \"npm\",    \"port\": 3306  &#125;&#125;\n여기에 보면 host 항목이 db 라고 되어있는데 실제 가동된 컨테이너에서는 /app/config/production.json입니다.이 파일에서 해당 부분을 실제 컨테이너에서 부여받은 IP로 변경해주시면 됩니다.(또는 /etc/hosts 파일을 수정해 주셔도 될 것 같습니다.)\n이렇게 구축이 완료되면, 위에서 설정한 포트로 브라우저를 이용해 접속해봅니다.\n\n현제 저희 서버에서 가동중인 Nginx Proxy Manager 입니다.첫 접속시 초기 관리자계정 설정만 해주시면 동일한 화면을 만나실 수 있습니다.\nProxy Host 등록리버스프록시를 설정하기 위해서는 첫번째 메뉴인 Proxy Hosts 메뉴로 들어갑니다.\n\n아이템 추가 모달에서 기본적인 설정을 해 줍니다.제 경우에는 Shuttlecock_API 컨테이너가 구동중인 도커 컨테이너 IP를 입력하였고, shuttle이라는 서브도메인을 붙여주었습니다.\nCloudflare Origin Cert를 이용한 HTTPS를 이용할 것이기 때문에 443 포트를 열어주었습니다.\nCloudflare 인증서 등록\n이제 SSL 메뉴로 들어가서 Add SSL Certificate 를 눌러 미리 발급받아둔 Cert와 Key 파일을 삽입해줍니다.\n\n이제 다시 아까 Proxy Hosts 메뉴에서 방금 등록했던 아이템을 Edit 모드로 들어와 줍니다.\n세번째 탭의 SSL 항목에 보면 방금 등록했던 SSL 인즈서가 떠 있는것을 확인할 수 있습니다.\n별도의 인증서가 없다면 Request a new SSL Certificate 를 눌러 Let’s Encrypt 인증서를 즉석에서 발급받을 수도 있습니다.\nDNS 설정\n마지막으로 이용중인 DNS관리 서비스에 들어가서 A 레코드로 서브도메인을 등록해 줍니다.\n제가 이용하고있는 Cloudflare DNS 관리탭에서 shuttle 라는 서브도메인을 설정해 두었습니다.\n완료마지막으로 테스트를 진행해 봅니다.\n123456789101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869C:\\Users\\kygha&gt;curl -v https:&#x2F;&#x2F;shuttle.jaram.net&#x2F;semester&#x2F;week&#x2F;subway*   Trying 104.28.4.122...* TCP_NODELAY set* Connected to shuttle.jaram.net (104.28.4.122) port 443 (#0)* schannel: SSL&#x2F;TLS connection with shuttle.jaram.net port 443 (step 1&#x2F;3)* schannel: checking server certificate revocation* schannel: sending initial handshake data: sending 182 bytes...* schannel: sent initial handshake data: sent 182 bytes* schannel: SSL&#x2F;TLS connection with shuttle.jaram.net port 443 (step 2&#x2F;3)* schannel: failed to receive handshake, need more data* schannel: SSL&#x2F;TLS connection with shuttle.jaram.net port 443 (step 2&#x2F;3)* schannel: encrypted data got 2699* schannel: encrypted data buffer: offset 2699 length 4096* schannel: sending next handshake data: sending 93 bytes...* schannel: SSL&#x2F;TLS connection with shuttle.jaram.net port 443 (step 2&#x2F;3)* schannel: encrypted data got 258* schannel: encrypted data buffer: offset 258 length 4096* schannel: SSL&#x2F;TLS handshake complete* schannel: SSL&#x2F;TLS connection with shuttle.jaram.net port 443 (step 3&#x2F;3)* schannel: stored credential handle in session cache&gt; GET &#x2F;semester&#x2F;week&#x2F;subway HTTP&#x2F;1.1&gt; Host: shuttle.jaram.net&gt; User-Agent: curl&#x2F;7.55.1&gt; Accept: *&#x2F;*&gt;* schannel: client wants to read 102400 bytes* schannel: encdata_buffer resized 103424* schannel: encrypted data buffer: offset 0 length 103424* schannel: encrypted data got 3997* schannel: encrypted data buffer: offset 3997 length 103424* schannel: decrypted data length: 1369* schannel: decrypted data added: 1369* schannel: decrypted data cached: offset 1369 length 102400* schannel: encrypted data length: 2599* schannel: encrypted data cached: offset 2599 length 103424* schannel: decrypted data length: 1369* schannel: decrypted data added: 1369* schannel: decrypted data cached: offset 2738 length 102400* schannel: encrypted data length: 1201* schannel: encrypted data cached: offset 1201 length 103424* schannel: decrypted data length: 1172* schannel: decrypted data added: 1172* schannel: decrypted data cached: offset 3910 length 102400* schannel: encrypted data buffer: offset 0 length 103424* schannel: decrypted data buffer: offset 3910 length 102400* schannel: schannel_recv cleanup* schannel: decrypted data returned 3910* schannel: decrypted data buffer: offset 0 length 102400&lt; HTTP&#x2F;1.1 200 OK&lt; Date: Fri, 01 Nov 2019 07:10:28 GMT&lt; Content-Type: application&#x2F;json; charset&#x3D;utf-8&lt; Content-Length: 3164&lt; Connection: keep-alive&lt; Set-Cookie:  expires&#x3D;Sat, 31-Oct-20 07:10:28 GMT; path&#x3D;&#x2F;; domain&#x3D;.jaram.net; HttpOnly&lt; X-Powered-By: Express&lt; Access-Control-Allow-Origin: *&lt; Access-Control-Allow-Methods: GET&lt; Access-Control-Allow-Headers: content-type&lt; ETag: W&#x2F;&quot;c5c-5nbjArWyrXTTrHZr5cBgV5Mhwpg&quot;&lt; Strict-Transport-Security: max-age&#x3D;31536000;includeSubDomains; preload&lt; X-Served-By: shuttle.jaram.net&lt; CF-Cache-Status: DYNAMIC&lt; Expect-CT: max-age&#x3D;604800, report-uri&#x3D;&quot;https:&#x2F;&#x2F;report-uri.cloudflare.com&#x2F;cdn-cgi&#x2F;beacon&#x2F;expect-ct&quot;&lt; Server: cloudflare&lt; CF-RAY: 52ec0c91ab08db10-KIX&lt;&#123;중략&#125;Connection #0 to host shuttle.jaram.net left intact\n\nCloudflare DNS 를 이용해 Proxy 로 설정했기 때문에 클플 데이터센터를 통해 연결이 수립된 것을 확인할 수 있습니다.\n실제 컨테이너는 Wellknown Port 가 아닌 다른 곳에서 서비스 하고 있지만, 443 포트로 접속하여 문제없이 연결이 수립되었음을 확인할 수 있습니다.\n이 원리를 이용하여 현재 Jenkins, Jupyter 등을 리버스프록시를 이용하여 서비스하고 있습니다.","dateCreated":"2019-10-23T02:24:21+09:00","dateModified":"2020-07-26T04:26:32+09:00","datePublished":"2019-10-23T02:24:21+09:00","description":"개인 사이드프로젝트로 진행하고있는 교내 셔틀버스 알림 서비스를 제작하면서 남기는 기록의 두번째 이야기 입니다.","headline":"젠킨스와 도커를 이용한 셔틀버스 알림 서비스 개발기(2)","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"https://zerogyun.dev/2019/10/23/%EC%85%94%ED%8B%80%EB%B2%84%EC%8A%A4%20%EC%95%8C%EB%A6%BC%EC%84%9C%EB%B9%84%EC%8A%A4%20%EA%B0%9C%EB%B0%9C%EA%B8%B0(2)/"},"publisher":{"@type":"Organization","name":"zerogyun","sameAs":["https://github.com/cxz7720","mailto:admin@zerogyun.dev"],"image":"https://avatars1.githubusercontent.com/u/29659112?s=460&v=4","logo":{"@type":"ImageObject","url":"https://avatars1.githubusercontent.com/u/29659112?s=460&v=4"}},"url":"https://zerogyun.dev/2019/10/23/%EC%85%94%ED%8B%80%EB%B2%84%EC%8A%A4%20%EC%95%8C%EB%A6%BC%EC%84%9C%EB%B9%84%EC%8A%A4%20%EA%B0%9C%EB%B0%9C%EA%B8%B0(2)/","keywords":"shuttle, pwa, vue, jenkins, docker, git, devops"}</script>
+    <meta name="description" content="개인 사이드프로젝트로 진행하고있는 교내 셔틀버스 알림 서비스를 제작하면서 남기는 기록의 두번째 이야기 입니다.">
+<meta property="og:type" content="blog">
+<meta property="og:title" content="젠킨스와 도커를 이용한 셔틀버스 알림 서비스 개발기(2)">
+<meta property="og:url" content="https://zerogyun.dev/2019/10/23/%EC%85%94%ED%8B%80%EB%B2%84%EC%8A%A4%20%EC%95%8C%EB%A6%BC%EC%84%9C%EB%B9%84%EC%8A%A4%20%EA%B0%9C%EB%B0%9C%EA%B8%B0(2)/index.html">
+<meta property="og:site_name" content="사다리타기">
+<meta property="og:description" content="개인 사이드프로젝트로 진행하고있는 교내 셔틀버스 알림 서비스를 제작하면서 남기는 기록의 두번째 이야기 입니다.">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:image" content="https://user-images.githubusercontent.com/29659112/67309327-a104db80-f536-11e9-9bc7-75203d837a6b.jpg">
+<meta property="og:image" content="https://user-images.githubusercontent.com/29659112/67421058-b64b3a00-f60a-11e9-9e93-ad9b9e32d871.jpg">
+<meta property="og:image" content="https://user-images.githubusercontent.com/29659112/68007404-db9d0f80-fcbe-11e9-88d0-d06464b21654.jpg">
+<meta property="og:image" content="https://user-images.githubusercontent.com/29659112/68007764-f2903180-fcbf-11e9-8a47-1576b24600e1.png">
+<meta property="og:image" content="https://user-images.githubusercontent.com/29659112/68007883-587cb900-fcc0-11e9-955f-42a7c6349be3.png">
+<meta property="og:image" content="https://user-images.githubusercontent.com/29659112/68008029-caed9900-fcc0-11e9-8088-cc81f02cdf63.png">
+<meta property="og:image" content="https://user-images.githubusercontent.com/29659112/68008218-7dbdf700-fcc1-11e9-8b76-f4be83bb80c7.png">
+<meta property="article:published_time" content="2019-10-22T17:24:21.000Z">
+<meta property="article:modified_time" content="2020-07-25T19:26:32.842Z">
+<meta property="article:author" content="zerogyun">
+<meta property="article:tag" content="shuttle">
+<meta property="article:tag" content="pwa">
+<meta property="article:tag" content="vue">
+<meta property="article:tag" content="jenkins">
+<meta property="article:tag" content="docker">
+<meta property="article:tag" content="git">
+<meta property="article:tag" content="devops">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://user-images.githubusercontent.com/29659112/67309327-a104db80-f536-11e9-9bc7-75203d837a6b.jpg">
+    
+    
+        
+    
+    
+        <meta property="og:image" content="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4">
+    
+    
+    
+    
+    <!--STYLES-->
+    
+<link rel="stylesheet" href="/assets/css/style-gfvy1paadnhrenematj51np8g8cfvu4k1avie6z7jqeilszkarsav8zxtmuu.min.css">
+
+    <!--STYLES END-->
+    
+    <script async src="https://www.googletagmanager.com/gtag/js?id=UA-126694602-3"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+
+        gtag('config', 'UA-126694602-3');
+    </script>
+
+
+    
+
+    
+        
+    
+</head>
+
+    <body>
+        <div id="blog">
+            <!-- Define author's picture -->
+
+
+    
+        
+            
+        
+    
+
+<header id="header" data-behavior="5">
+    <i id="btn-open-sidebar" class="fa fa-lg fa-bars"></i>
+    <div class="header-title">
+        <a class="header-title-link" href="/" aria-label>
+            사다리타기
+        </a>
+    </div>
+    
+        
+            <a class="header-right-picture " href="#about" aria-label="링크 열기: /#about">
+        
+        
+            <img class="header-picture" src="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4" alt="저자 이미지">
+        
+        </a>
+    
+</header>
+
+            <!-- Define author's picture -->
+
+
+
+        
+    
+
+<nav id="sidebar" data-behavior="5">
+    <div class="sidebar-container">
+        
+            <div class="sidebar-profile">
+                <a href="/#about" aria-label="저자에 대해 더 알아보기">
+                    <img class="sidebar-profile-picture" src="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4" alt="저자 이미지">
+                </a>
+                <h4 class="sidebar-profile-name">zerogyun</h4>
+                
+                    <h5 class="sidebar-profile-bio"><p>문과생은 코딩을 추구하면 안되는걸까🎉🎉😎</p>
+</h5>
+                
+            </div>
+        
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="/" rel="noopener" title="Home">
+                        <i class="sidebar-button-icon fa fa-home" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Home</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="/all-categories" rel="noopener" title="카테고리">
+                        <i class="sidebar-button-icon fa fa-bookmark" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">카테고리</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="/all-tags" rel="noopener" title="태그">
+                        <i class="sidebar-button-icon fa fa-tags" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">태그</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="https://zerogyun.dev/profile" rel="noopener" title="About">
+                        <i class="sidebar-button-icon fa fa-question" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">About</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="https://github.com/cxz7720" target="_blank" rel="external nofollow noopener noreferrer" title="GitHub">
+                        <i class="sidebar-button-icon fab fa-github" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">GitHub</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="mailto:admin@zerogyun.dev" target="_blank" rel="noopener" title="Mail">
+                        <i class="sidebar-button-icon fa fa-envelope" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Mail</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+    </div>
+</nav>
+
+            
+            <div id="main" data-behavior="5" class="
+                        hasCoverMetaIn
+                        ">
+                
+<article class="post">
+    
+    
+        <div class="post-header main-content-wrap text-left">
+    
+        <h1 class="post-title">
+            젠킨스와 도커를 이용한 셔틀버스 알림 서비스 개발기(2)
+        </h1>
+    
+    
+        <div class="post-meta">
+    <time datetime="2019-10-23T02:24:21+09:00">
+	
+		    2019/10/23
+    	
+    </time>
+    
+        <span>카테고리 </span>
+        
+    <a class="category-link" href="/categories/Shuttle-Project/">Shuttle_Project</a>
+
+
+    
+</div>
+
+    
+</div>
+
+    
+    <div class="post-content markdown">
+        <div class="main-content-wrap">
+            <!-- excerpt -->
+
+<h3 id="실제-서비스의-문제"><a href="#실제-서비스의-문제" class="headerlink" title="실제 서비스의 문제"></a>실제 서비스의 문제</h3><h4 id="방화벽을-넘어서"><a href="#방화벽을-넘어서" class="headerlink" title="방화벽을 넘어서.."></a>방화벽을 넘어서..</h4><p>현재 서비스되고 있는 API 컨테이너는 단과대학 소속 학회방에있는 서버 컴퓨터에서 학교 인터넷망에 연결되어 운영되고 있습니다.</p>
+<p>학교 내부망에서 동작하고 있는 서버다 보니 <em>Well-Known Ports</em> 를 제외하고는 다른 포트를 사용할 수 없다는 치명적인 문제가 발생하였습니다.</p>
+<p><img src="https://user-images.githubusercontent.com/29659112/67309327-a104db80-f536-11e9-9bc7-75203d837a6b.jpg" alt="portainer"></p>
+<p>위쪽 Portainer 캡쳐 이미지를 보셔서 짐작하실 수 있겠지만, 현재 학회 서버로 운영중인 서비스가 약 5~6개 정도 되며, 저희 프로젝트만을 위해 학회 공식 홈페이지를 서비스 하고 있는 80 포트와 443 포트를 강탈할 수는 없는 노릇이죠.</p>
+<p>사실 이전부터 대두되었던 문제입니다만, 라즈베리파이를 연결하여 외부에서 사용하고자 하거나, MariaDB를 도커 컨테이너로 올려 수업중에 다른 강의실에서 연결하고자 할 경우에도 공식적으로 열려있는 포트 이외의 조금이라도 특이한 포트들은 모두 방화벽에서 In/Out 모두 차단해버리곤 했습니다</p>
+<p>이전 까지만 해도 담당 지도교수님께 찾아가 직접 자필 서명을 받고, 방화벽 해제 신청서를 학과 사무실에 제출해서 승인처리가 되어야 저희가 사용하는 IP에 대하여 특정 포트의 방화벽이 해제되는 정책이었습니다.</p>
+<p>중간 관리자나 교수님 입장에서 매번 서류작업을 한다는 것은 상당히 성가신 일입니다.<br>물론 사용하고자 하는 포트를 한번에 적어서 범위로 신청하는것도 방법이지만, 어째서인지 지난번 신청 당시 그렇게 했음에도 적용이 되지 않은 케이스가 몇개 발견되어 상당히 고된 삽질을 했던것으로 기억합니다.</p>
+<h4 id="NginX-리버스프록시-우리는-언젠가-결국-답을-찾을-것이다"><a href="#NginX-리버스프록시-우리는-언젠가-결국-답을-찾을-것이다" class="headerlink" title="NginX 리버스프록시 : 우리는 언젠가 결국 답을 찾을 것이다."></a>NginX 리버스프록시 : 우리는 언젠가 결국 답을 찾을 것이다.</h4><p>열혈 구글링 끝에 <strong><em>리버스프록시</em></strong> 라는 기술에 대하여 알게되었습니다.</p>
+<p>Nginx 나 Apache가 일종의 신호등 역할을 하여 Domain을 기준으로 판별하여 내부 서비스 포트로 매칭을 시켜주는 기능 입니다.<br>자세한 내용은 아래 그림을 참조하시면 쉽게 이해할 수 있습니다.</p>
+<p><img src="https://user-images.githubusercontent.com/29659112/67421058-b64b3a00-f60a-11e9-9e93-ad9b9e32d871.jpg" alt="nginx"></p>
+<p>http 통신의 기본 포트인 80과 HTTPS 통신을 위한 443 포트로 모든 Inbound 연결이 들어옵니다.<br>Nginx 를 역시 도커 컨테이너 형태로 띄워서 <code>-p 80:80, 443:443</code> 옵션을 주어 Host OS와 연결시켜둡니다.</p>
+<p>사실 외부 인터넷과 Nginx 컨테이너가 구동되고 있는 Host 컴퓨터 사이에는 공유기가 있기 때문에 공유기에서 포트포워딩을 통해 서버컴퓨터로 80포트와 443 포트를 바라보도록 설정하였습니다.</p>
+<h4 id="NginX-Proxy-Manager-를-이용하여-리버스-프록시-구현"><a href="#NginX-Proxy-Manager-를-이용하여-리버스-프록시-구현" class="headerlink" title="NginX Proxy Manager 를 이용하여 리버스 프록시 구현"></a>NginX Proxy Manager 를 이용하여 리버스 프록시 구현</h4><p>구글링을 통해 나오는 NginX 리버스프록시 강좌는 무수히 많았지만 모두가 조금씩 다른 설정 파일을 만들어서 사용하고 있었습니다. 조금씩 비슷하긴 했지만 어떻게 설정해야 우리의 환경에 적합한지 한참 고민하고 있었는데요, NginX 설정을 보다 쉽게 Web UI 를 통해 할 수 있게 도와주는 좋은 프로젝트가 있어서 직접 사용해보았습니다.</p>
+<p><a href="https://github.com/jc21/nginx-proxy-manager" target="_blank" rel="external nofollow noopener noreferrer">Nginx Proxy Manager</a></p>
+<p>저희 팀이 선택한 해결책입니다. 가장 마음에 들었던 부분은 이 서비스 역시 <strong>도커</strong>를 통해서 배포되고 있다는 점이었죠.(<del>기승전 도커</del>)</p>
+<h4 id="컨테이너-구축"><a href="#컨테이너-구축" class="headerlink" title="컨테이너 구축"></a>컨테이너 구축</h4><p>설치 방법은 쉽습니다. docker-compose 명령어를 이용해 미리 작성된 파일을 이용해 설치하면 됩니다.</p>
+<p>다만 저는 Bridge 네트워크를 사용하기 위해 <code>docker-compose.yml</code> 파일의 각 컨테이너 세부설정에 <code>Network: Bridge</code> 라는 구문을 추가해 주었습니다.<br>이 docker-compose를 이용하여 컨테이너를 가동할 경우 web_example1 이라는 컨테이너와 db_example1 이라는 두 개의 컨테이너가 동시에 가동됩니다. web 컨테이너의 경우 DB 컨테이너와 정상적으로 Connect 되어야 <code>Healthy</code> 판정을 받습니다.</p>
+<p>제 경우에는 <code>docker-compose.yml</code> Bridge Network 모드로 강제로 설정해서 그런지 DB 컨테이너를 찾지 못하는 증상이 있어서 수동으로 컨테이너에 접속하여 <code>config</code> 파일을 DB 컨테이너에 할당된 도커 IP대역으로 변경해주었습니다. (제 경우에는 172.17.0.X 대역으로 잡혔습니다.)</p>
+<p>깃허브 소스에서 <code>docker-compose.yml</code> 파일과 같은 경로에 있는 <code>config.json</code>이 DB연결시에 사용되는 설정값을 담고 있습니다.</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  <span class="attr">"database"</span>: &#123;</span><br><span class="line">    <span class="attr">"engine"</span>: <span class="string">"mysql"</span>,</span><br><span class="line">    <span class="attr">"host"</span>: <span class="string">"db"</span>,</span><br><span class="line">    <span class="attr">"name"</span>: <span class="string">"npm"</span>,</span><br><span class="line">    <span class="attr">"user"</span>: <span class="string">"npm"</span>,</span><br><span class="line">    <span class="attr">"password"</span>: <span class="string">"npm"</span>,</span><br><span class="line">    <span class="attr">"port"</span>: <span class="number">3306</span></span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>여기에 보면 <code>host</code> 항목이 db 라고 되어있는데 실제 가동된 컨테이너에서는 <code>/app/config/production.json</code>입니다.<br>이 파일에서 해당 부분을 실제 컨테이너에서 부여받은 IP로 변경해주시면 됩니다.<br>(또는 <code>/etc/hosts</code> 파일을 수정해 주셔도 될 것 같습니다.)</p>
+<p>이렇게 구축이 완료되면, 위에서 설정한 포트로 브라우저를 이용해 접속해봅니다.</p>
+<p><img src="https://user-images.githubusercontent.com/29659112/68007404-db9d0f80-fcbe-11e9-88d0-d06464b21654.jpg" alt="Screenshot 2019-11-01 at 15 44 21"></p>
+<p>현제 저희 서버에서 가동중인 Nginx Proxy Manager 입니다.<br>첫 접속시 초기 관리자계정 설정만 해주시면 동일한 화면을 만나실 수 있습니다.</p>
+<h5 id="Proxy-Host-등록"><a href="#Proxy-Host-등록" class="headerlink" title="Proxy Host 등록"></a>Proxy Host 등록</h5><p>리버스프록시를 설정하기 위해서는 첫번째 메뉴인 <code>Proxy Hosts</code> 메뉴로 들어갑니다.</p>
+<p><img src="https://user-images.githubusercontent.com/29659112/68007764-f2903180-fcbf-11e9-8a47-1576b24600e1.png" alt="nginxproxy"></p>
+<p>아이템 추가 모달에서 기본적인 설정을 해 줍니다.<br>제 경우에는 Shuttlecock_API 컨테이너가 구동중인 도커 컨테이너 IP를 입력하였고, shuttle이라는 서브도메인을 붙여주었습니다.</p>
+<p>Cloudflare Origin Cert를 이용한 HTTPS를 이용할 것이기 때문에 443 포트를 열어주었습니다.</p>
+<h5 id="Cloudflare-인증서-등록"><a href="#Cloudflare-인증서-등록" class="headerlink" title="Cloudflare 인증서 등록"></a>Cloudflare 인증서 등록</h5><p><img src="https://user-images.githubusercontent.com/29659112/68007883-587cb900-fcc0-11e9-955f-42a7c6349be3.png" alt="ssl"></p>
+<p>이제 SSL 메뉴로 들어가서 <code>Add SSL Certificate</code> 를 눌러 미리 발급받아둔 Cert와 Key 파일을 삽입해줍니다.</p>
+<p><img src="https://user-images.githubusercontent.com/29659112/68008029-caed9900-fcc0-11e9-8088-cc81f02cdf63.png" alt="select ssl"></p>
+<p>이제 다시 아까 Proxy Hosts 메뉴에서 방금 등록했던 아이템을 Edit 모드로 들어와 줍니다.</p>
+<p>세번째 탭의 SSL 항목에 보면 방금 등록했던 SSL 인즈서가 떠 있는것을 확인할 수 있습니다.</p>
+<p>별도의 인증서가 없다면 <code>Request a new SSL Certificate</code> 를 눌러 Let’s Encrypt 인증서를 즉석에서 발급받을 수도 있습니다.</p>
+<h5 id="DNS-설정"><a href="#DNS-설정" class="headerlink" title="DNS 설정"></a>DNS 설정</h5><p><img src="https://user-images.githubusercontent.com/29659112/68008218-7dbdf700-fcc1-11e9-8b76-f4be83bb80c7.png" alt="dns"></p>
+<p>마지막으로 이용중인 DNS관리 서비스에 들어가서 A 레코드로 서브도메인을 등록해 줍니다.</p>
+<p>제가 이용하고있는 Cloudflare DNS 관리탭에서 <code>shuttle</code> 라는 서브도메인을 설정해 두었습니다.</p>
+<h5 id="완료"><a href="#완료" class="headerlink" title="완료"></a>완료</h5><p>마지막으로 테스트를 진행해 봅니다.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br></pre></td><td class="code"><pre><span class="line">C:\Users\kygha&gt;curl -v https:&#x2F;&#x2F;shuttle.jaram.net&#x2F;semester&#x2F;week&#x2F;subway</span><br><span class="line">*   Trying 104.28.4.122...</span><br><span class="line">* TCP_NODELAY set</span><br><span class="line">* Connected to shuttle.jaram.net (104.28.4.122) port 443 (#0)</span><br><span class="line">* schannel: SSL&#x2F;TLS connection with shuttle.jaram.net port 443 (step 1&#x2F;3)</span><br><span class="line">* schannel: checking server certificate revocation</span><br><span class="line">* schannel: sending initial handshake data: sending 182 bytes...</span><br><span class="line">* schannel: sent initial handshake data: sent 182 bytes</span><br><span class="line">* schannel: SSL&#x2F;TLS connection with shuttle.jaram.net port 443 (step 2&#x2F;3)</span><br><span class="line">* schannel: failed to receive handshake, need more data</span><br><span class="line">* schannel: SSL&#x2F;TLS connection with shuttle.jaram.net port 443 (step 2&#x2F;3)</span><br><span class="line">* schannel: encrypted data got 2699</span><br><span class="line">* schannel: encrypted data buffer: offset 2699 length 4096</span><br><span class="line">* schannel: sending next handshake data: sending 93 bytes...</span><br><span class="line">* schannel: SSL&#x2F;TLS connection with shuttle.jaram.net port 443 (step 2&#x2F;3)</span><br><span class="line">* schannel: encrypted data got 258</span><br><span class="line">* schannel: encrypted data buffer: offset 258 length 4096</span><br><span class="line">* schannel: SSL&#x2F;TLS handshake complete</span><br><span class="line">* schannel: SSL&#x2F;TLS connection with shuttle.jaram.net port 443 (step 3&#x2F;3)</span><br><span class="line">* schannel: stored credential handle in session cache</span><br><span class="line">&gt; GET &#x2F;semester&#x2F;week&#x2F;subway HTTP&#x2F;1.1</span><br><span class="line">&gt; Host: shuttle.jaram.net</span><br><span class="line">&gt; User-Agent: curl&#x2F;7.55.1</span><br><span class="line">&gt; Accept: *&#x2F;*</span><br><span class="line">&gt;</span><br><span class="line">* schannel: client wants to read 102400 bytes</span><br><span class="line">* schannel: encdata_buffer resized 103424</span><br><span class="line">* schannel: encrypted data buffer: offset 0 length 103424</span><br><span class="line">* schannel: encrypted data got 3997</span><br><span class="line">* schannel: encrypted data buffer: offset 3997 length 103424</span><br><span class="line">* schannel: decrypted data length: 1369</span><br><span class="line">* schannel: decrypted data added: 1369</span><br><span class="line">* schannel: decrypted data cached: offset 1369 length 102400</span><br><span class="line">* schannel: encrypted data length: 2599</span><br><span class="line">* schannel: encrypted data cached: offset 2599 length 103424</span><br><span class="line">* schannel: decrypted data length: 1369</span><br><span class="line">* schannel: decrypted data added: 1369</span><br><span class="line">* schannel: decrypted data cached: offset 2738 length 102400</span><br><span class="line">* schannel: encrypted data length: 1201</span><br><span class="line">* schannel: encrypted data cached: offset 1201 length 103424</span><br><span class="line">* schannel: decrypted data length: 1172</span><br><span class="line">* schannel: decrypted data added: 1172</span><br><span class="line">* schannel: decrypted data cached: offset 3910 length 102400</span><br><span class="line">* schannel: encrypted data buffer: offset 0 length 103424</span><br><span class="line">* schannel: decrypted data buffer: offset 3910 length 102400</span><br><span class="line">* schannel: schannel_recv cleanup</span><br><span class="line">* schannel: decrypted data returned 3910</span><br><span class="line">* schannel: decrypted data buffer: offset 0 length 102400</span><br><span class="line">&lt; HTTP&#x2F;1.1 200 OK</span><br><span class="line">&lt; Date: Fri, 01 Nov 2019 07:10:28 GMT</span><br><span class="line">&lt; Content-Type: application&#x2F;json; charset&#x3D;utf-8</span><br><span class="line">&lt; Content-Length: 3164</span><br><span class="line">&lt; Connection: keep-alive</span><br><span class="line">&lt; Set-Cookie: </span><br><span class="line"> expires&#x3D;Sat, 31-Oct-20 07:10:28 GMT; path&#x3D;&#x2F;; domain&#x3D;.jaram.net; HttpOnly</span><br><span class="line">&lt; X-Powered-By: Express</span><br><span class="line">&lt; Access-Control-Allow-Origin: *</span><br><span class="line">&lt; Access-Control-Allow-Methods: GET</span><br><span class="line">&lt; Access-Control-Allow-Headers: content-type</span><br><span class="line">&lt; ETag: W&#x2F;&quot;c5c-5nbjArWyrXTTrHZr5cBgV5Mhwpg&quot;</span><br><span class="line">&lt; Strict-Transport-Security: max-age&#x3D;31536000;includeSubDomains; preload</span><br><span class="line">&lt; X-Served-By: shuttle.jaram.net</span><br><span class="line">&lt; CF-Cache-Status: DYNAMIC</span><br><span class="line">&lt; Expect-CT: max-age&#x3D;604800, report-uri&#x3D;&quot;https:&#x2F;&#x2F;report-uri.cloudflare.com&#x2F;cdn-cgi&#x2F;beacon&#x2F;expect-ct&quot;</span><br><span class="line">&lt; Server: cloudflare</span><br><span class="line">&lt; CF-RAY: 52ec0c91ab08db10-KIX</span><br><span class="line">&lt;</span><br><span class="line">&#123;중략&#125;</span><br><span class="line">Connection #0 to host shuttle.jaram.net left intact</span><br></pre></td></tr></table></figure>
+
+<p>Cloudflare DNS 를 이용해 Proxy 로 설정했기 때문에 클플 데이터센터를 통해 연결이 수립된 것을 확인할 수 있습니다.</p>
+<p>실제 컨테이너는 Wellknown Port 가 아닌 다른 곳에서 서비스 하고 있지만, 443 포트로 접속하여 문제없이 연결이 수립되었음을 확인할 수 있습니다.</p>
+<p>이 원리를 이용하여 현재 Jenkins, Jupyter 등을 리버스프록시를 이용하여 서비스하고 있습니다.</p>
+            
+
+
+        </div>
+    </div>
+    <div id="post-footer" class="post-footer main-content-wrap">
+        
+            <div class="post-footer-tags">
+                <span class="text-color-light text-small">태그</span><br>
+                
+    <a class="tag tag--primary tag--small t-link" href="/tags/devops/" rel="tag">devops</a> <a class="tag tag--primary tag--small t-link" href="/tags/docker/" rel="tag">docker</a> <a class="tag tag--primary tag--small t-link" href="/tags/git/" rel="tag">git</a> <a class="tag tag--primary tag--small t-link" href="/tags/jenkins/" rel="tag">jenkins</a> <a class="tag tag--primary tag--small t-link" href="/tags/pwa/" rel="tag">pwa</a> <a class="tag tag--primary tag--small t-link" href="/tags/shuttle/" rel="tag">shuttle</a> <a class="tag tag--primary tag--small t-link" href="/tags/vue/" rel="tag">vue</a>
+
+            </div>
+        
+
+        <!-- 커스터마이징 해본 관련 글 영역-->
+        
+        
+        <div class="post-footer-tags">
+            <span class="text-color-light text-small">관련 글</span><br>
+            <ul class="popular-posts"><li class="popular-posts-item"><div class="popular-posts-title"><h3><a href="/2019/10/23/셔틀버스 알림서비스 개발기 (1)/" title="젠킨스와 도커를 이용한 셔틀버스 알림 서비스 개발기(1)" rel="bookmark">젠킨스와 도커를 이용한 셔틀버스 알림 서비스 개발기(1)</a></h3></div></li><li class="popular-posts-item"><div class="popular-posts-title"><h3><a href="/2019/12/20/오픈소스 커뮤니티 체험기/" title="오픈소스 커뮤니티 체험기" rel="bookmark">오픈소스 커뮤니티 체험기</a></h3></div></li></ul>
+        </div>
+        
+        <!-- 끝 -->
+        
+        
+            <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a class="post-action-btn btn btn--default tooltip--top" href="/2019/12/20/%EC%98%A4%ED%94%88%EC%86%8C%EC%8A%A4%20%EC%BB%A4%EB%AE%A4%EB%8B%88%ED%8B%B0%20%EC%B2%B4%ED%97%98%EA%B8%B0/" data-tooltip="오픈소스 커뮤니티 체험기" aria-label="이전: 오픈소스 커뮤니티 체험기">
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">이전</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a class="post-action-btn btn btn--default tooltip--top" href="/2019/10/23/%EC%85%94%ED%8B%80%EB%B2%84%EC%8A%A4%20%EC%95%8C%EB%A6%BC%EC%84%9C%EB%B9%84%EC%8A%A4%20%EA%B0%9C%EB%B0%9C%EA%B8%B0%20(1)/" data-tooltip="젠킨스와 도커를 이용한 셔틀버스 알림 서비스 개발기(1)" aria-label="다음: 젠킨스와 도커를 이용한 셔틀버스 알림 서비스 개발기(1)">
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">다음</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a class="post-action-btn btn btn--default btn-open-shareoptions" href="#btn-open-shareoptions" aria-label="이 포스트 공유하기">
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://www.facebook.com/sharer/sharer.php?u=https://zerogyun.dev/2019/10/23/%EC%85%94%ED%8B%80%EB%B2%84%EC%8A%A4%20%EC%95%8C%EB%A6%BC%EC%84%9C%EB%B9%84%EC%8A%A4%20%EA%B0%9C%EB%B0%9C%EA%B8%B0(2)/" title="Facebook에 공유하기" aria-label="Facebook에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://twitter.com/intent/tweet?text=https://zerogyun.dev/2019/10/23/%EC%85%94%ED%8B%80%EB%B2%84%EC%8A%A4%20%EC%95%8C%EB%A6%BC%EC%84%9C%EB%B9%84%EC%8A%A4%20%EA%B0%9C%EB%B0%9C%EA%B8%B0(2)/" title="Twitter에 공유하기" aria-label="Twitter에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://plus.google.com/share?url=https://zerogyun.dev/2019/10/23/%EC%85%94%ED%8B%80%EB%B2%84%EC%8A%A4%20%EC%95%8C%EB%A6%BC%EC%84%9C%EB%B9%84%EC%8A%A4%20%EA%B0%9C%EB%B0%9C%EA%B8%B0(2)/" title="Google+에 공유하기" aria-label="Google+에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+                <li class="post-action">
+                    <a class="post-action-btn btn btn--default" href="#disqus_thread" aria-label="댓글을 남겨주세요">
+                        <i class="fa fa-comment"></i>
+                    </a>
+                </li>
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="맨 위로">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+        
+        
+            
+                <div id="disqus_thread">
+    <noscript>Please enable JavaScript to view the <a href="//disqus.com/?ref_noscript" target="_blank" rel="noopener">comments powered by Disqus.</a></noscript>
+</div>
+            
+        
+    </div>
+</article>
+
+
+
+                <footer id="footer" class="main-content-wrap">
+    <span class="copyrights">
+        Copyrights &copy; 2020 zerogyun. All Rights Reserved.
+    </span>
+</footer>
+
+            </div>
+            
+                <div id="bottom-bar" class="post-bottom-bar" data-behavior="5">
+                    <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a class="post-action-btn btn btn--default tooltip--top" href="/2019/12/20/%EC%98%A4%ED%94%88%EC%86%8C%EC%8A%A4%20%EC%BB%A4%EB%AE%A4%EB%8B%88%ED%8B%B0%20%EC%B2%B4%ED%97%98%EA%B8%B0/" data-tooltip="오픈소스 커뮤니티 체험기" aria-label="이전: 오픈소스 커뮤니티 체험기">
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">이전</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a class="post-action-btn btn btn--default tooltip--top" href="/2019/10/23/%EC%85%94%ED%8B%80%EB%B2%84%EC%8A%A4%20%EC%95%8C%EB%A6%BC%EC%84%9C%EB%B9%84%EC%8A%A4%20%EA%B0%9C%EB%B0%9C%EA%B8%B0%20(1)/" data-tooltip="젠킨스와 도커를 이용한 셔틀버스 알림 서비스 개발기(1)" aria-label="다음: 젠킨스와 도커를 이용한 셔틀버스 알림 서비스 개발기(1)">
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">다음</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a class="post-action-btn btn btn--default btn-open-shareoptions" href="#btn-open-shareoptions" aria-label="이 포스트 공유하기">
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://www.facebook.com/sharer/sharer.php?u=https://zerogyun.dev/2019/10/23/%EC%85%94%ED%8B%80%EB%B2%84%EC%8A%A4%20%EC%95%8C%EB%A6%BC%EC%84%9C%EB%B9%84%EC%8A%A4%20%EA%B0%9C%EB%B0%9C%EA%B8%B0(2)/" title="Facebook에 공유하기" aria-label="Facebook에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://twitter.com/intent/tweet?text=https://zerogyun.dev/2019/10/23/%EC%85%94%ED%8B%80%EB%B2%84%EC%8A%A4%20%EC%95%8C%EB%A6%BC%EC%84%9C%EB%B9%84%EC%8A%A4%20%EA%B0%9C%EB%B0%9C%EA%B8%B0(2)/" title="Twitter에 공유하기" aria-label="Twitter에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://plus.google.com/share?url=https://zerogyun.dev/2019/10/23/%EC%85%94%ED%8B%80%EB%B2%84%EC%8A%A4%20%EC%95%8C%EB%A6%BC%EC%84%9C%EB%B9%84%EC%8A%A4%20%EA%B0%9C%EB%B0%9C%EA%B8%B0(2)/" title="Google+에 공유하기" aria-label="Google+에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+                <li class="post-action">
+                    <a class="post-action-btn btn btn--default" href="#disqus_thread" aria-label="댓글을 남겨주세요">
+                        <i class="fa fa-comment"></i>
+                    </a>
+                </li>
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="맨 위로">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+                </div>
+                
+    <div id="share-options-bar" class="share-options-bar" data-behavior="5">
+        <i id="btn-close-shareoptions" class="fa fa-times"></i>
+        <ul class="share-options">
+            
+                
+                
+                <li class="share-option">
+                    <a class="share-option-btn" target="_blank" href="https://www.facebook.com/sharer/sharer.php?u=https://zerogyun.dev/2019/10/23/%EC%85%94%ED%8B%80%EB%B2%84%EC%8A%A4%20%EC%95%8C%EB%A6%BC%EC%84%9C%EB%B9%84%EC%8A%A4%20%EA%B0%9C%EB%B0%9C%EA%B8%B0(2)/" aria-label="Facebook에 공유하기" rel="external nofollow noopener noreferrer">
+                        <i class="fab fa-facebook" aria-hidden="true"></i><span>Facebook에 공유하기</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a class="share-option-btn" target="_blank" href="https://twitter.com/intent/tweet?text=https://zerogyun.dev/2019/10/23/%EC%85%94%ED%8B%80%EB%B2%84%EC%8A%A4%20%EC%95%8C%EB%A6%BC%EC%84%9C%EB%B9%84%EC%8A%A4%20%EA%B0%9C%EB%B0%9C%EA%B8%B0(2)/" aria-label="Twitter에 공유하기" rel="external nofollow noopener noreferrer">
+                        <i class="fab fa-twitter" aria-hidden="true"></i><span>Twitter에 공유하기</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a class="share-option-btn" target="_blank" href="https://plus.google.com/share?url=https://zerogyun.dev/2019/10/23/%EC%85%94%ED%8B%80%EB%B2%84%EC%8A%A4%20%EC%95%8C%EB%A6%BC%EC%84%9C%EB%B9%84%EC%8A%A4%20%EA%B0%9C%EB%B0%9C%EA%B8%B0(2)/" aria-label="Google+에 공유하기" rel="external nofollow noopener noreferrer">
+                        <i class="fab fa-google-plus" aria-hidden="true"></i><span>Google+에 공유하기</span>
+                    </a>
+                </li>
+            
+        </ul>
+    </div>
+
+
+            
+        </div>
+        
+
+
+    
+        
+    
+
+<div id="about">
+    <div id="about-card">
+        <div id="about-btn-close">
+            <i class="fa fa-times"></i>
+        </div>
+        
+            <img id="about-card-picture" src="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4" alt="저자 이미지">
+        
+            <h4 id="about-card-name">zerogyun</h4>
+        
+            <div id="about-card-bio"><p>문과생은 코딩을 추구하면 안되는걸까🎉🎉😎</p>
+</div>
+        
+        
+            <div id="about-card-job">
+                <i class="fa fa-briefcase"></i>
+                <br>
+                <p>Student</p>
+
+            </div>
+        
+        
+            <div id="about-card-location">
+                <i class="fa fa-map-marker-alt"></i>
+                <br>
+                Seoul, South Korea
+            </div>
+        
+    </div>
+</div>
+
+        
+        
+<div id="cover" style="background-image:url('https://user-images.githubusercontent.com/29659112/76057866-1e009100-5fbe-11ea-84fe-00462e469e66.png');"></div>
+        <!--SCRIPTS-->
+
+<script src="/assets/js/script-0b9br5vpq85plmwdvtw8yqgpyj40cgb2lzib27pnr2wpe2cbodzjvxx71b2q.min.js"></script>
+
+<!--SCRIPTS END-->
+
+
+    
+        <script>
+          var disqus_config = function() {
+            this.page.url = 'https://zerogyun.dev/2019/10/23/%EC%85%94%ED%8B%80%EB%B2%84%EC%8A%A4%20%EC%95%8C%EB%A6%BC%EC%84%9C%EB%B9%84%EC%8A%A4%20%EA%B0%9C%EB%B0%9C%EA%B8%B0(2)/';
+              
+            this.page.identifier = '2019/10/23/셔틀버스 알림서비스 개발기(2)/';
+              
+          };
+          (function() {
+            var d = document, s = d.createElement('script');
+            var disqus_shortname = 'cxz7720-github-io-1';
+            s.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+
+            s.setAttribute('data-timestamp', +new Date());
+            (d.head || d.body).appendChild(s);
+          })();
+        </script>
+    
+
+
+
+
+    </body>
+</html>

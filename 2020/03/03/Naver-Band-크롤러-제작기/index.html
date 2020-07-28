@@ -1,0 +1,603 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+    
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="generator" content="사다리타기">
+    <title>Naver Band API와 텔레그램을 이용한 맞춤형 새글 알림 챗봇 제작기 - 사다리타기</title>
+    <meta name="author" content="zerogyun">
+    <link rel="canonical" href="https://zerogyun.dev/2020/03/03/naver-band-크롤러-제작기/">
+    
+    
+    
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"zerogyun","sameAs":["https://github.com/cxz7720","mailto:admin@zerogyun.dev"],"image":"https://avatars1.githubusercontent.com/u/29659112?s=460&v=4"},"articleBody":"이 글은 아버지께서 근무하시는 환경을 좀 더 개선할 수 없을까 고민하다가 만들어본 ‘Naver Band 키워드 알림봇” 토이 프로젝트의 후기입니다.\n\n네이버 Band의 새글알림을 선택적으로 받기슬랙이나 카카오톡처럼 키워드 알림을 설정할수 없는 Band에서는 자신이 원하는 글이 등록되었을 때 선택적으로 알림을 받을 수 있는 방법이 없습니다.\nBand에 등록된 글 중, 우리가 확인해야 할 게시글이 올라왔는지 알기 어려워 수시로 들어가야 하는 불편함이 있어 새글알림 봇을 만들게 되었습니다.해당 업무 특성상 새롭게 올라온 글은 실시간으로 확인하여 처리해야할 필요가 있어서 다른 업무중에도 수시로 들어가서 확인해야 하는 불편함이 있다고 하셨습니다.\n물론 Band 에도 사용자를 직접 태그하여 해당 유저에게 알림이 가도록 하는 방법이 있으나 \n\n글 작성자가 불특정 다수인 경우라 모든 사람이 해당 유저를 태그해준다는 보장이 없었으며\n올라오는 글의 특성상 어떤 유저에게 해당하는 포스팅인지 업무담당자 이외에는 판단하기 힘든 부분이 많아 잘못된 유저가 태그될 가능성이 높습니다.\n\n때문에 유저가 자신에게 해당하는 글이 올라왔을때에만 확인하도록 하는것이 가장 효과적인 방법이라고 판단하고 프로젝트를 구성하였습니다.\n1. Band API 토큰 발급네이버 Band API 토큰은 아래 링크에서 발급받을 수 있습니다.https://developers.band.us/처음엔 API의 존재를 모르고 BS4나 Selenium 을 이용해서 크롤링 할 생각에 고민이었습니다만, 다행히도 API를 제공해서 손쉽게 포스팅을 불러올 수 있었습니다.\n간단한 서비스 등록 양식을 작성하면 바로 토큰이 발급되어 사용할 수 있습니다.\n2. 서비스 구성도\n프로젝트의 구성도이다.\n\n토큰을 이용해 Band ID를 가져오고\nBand ID를 이용해 Post 목록을 불러와 리스트에 담는다.\n각 Post의 ID값을 DB목록과 대조하여 이미 조회한(검사한) 포스트일경우 continue\nDB에 등록되지 않은 새로은 포스트일 경우 Content 를 분석하여 우리 회사에 해당하는 글인지 검사\n우리회사에 해당하는 글이라면 Telegram Bot 메시지 전송, 아니라면 다음 Iteration 진행.\n리스트의 마지막까지 반복\n전체 과정을 지정된 시간마다 반복\n\n으로 계획했다.\n주기적으로 새글을 가져와야해서 7번 과정은 crontab 으로 구현하였고, 매번 글을 가져올때마다 이미 분석해서 판단이 완료된 포스팅은 중복처리를 방지하기 위하여 별도로 DB에 기록하여 비교하는 과정을 추가하였다.\n3. 개발대학교 1학년때 처음 배운 Python3 로 프로젝트를 시작했다. 그때 배운 뒤로는 한번도 제대로 파이썬을 프로젝트에서 사용해본 적이 없어서 다시 공부하며 진행했다.😂😂😂\npython-telegram-bot 패키지처음 개발환경은 윈도우노트북에서 진행하였으며 실제 서비스 환경은 Raspberry PI 3에서 굴리기로 하였다.\n그런데 꼭 필요한 python-telegram-bot 패키지가 pychram 에서 도통 설치가 되지 않는 문제가 계속 반복되었다.에러 로그를 확인해보니 cryptography 패키지를 설치하는데서 발생하는 문제였는데, .NET Framework를 설치해서 해결하라는 StackOverflow 답변대로 해보았지만 별다른 도움이 되지 못했다.\n결국 윈도우 개발환경을 포기하고 우분투 가상머신으로 넘어가서 해결하였다.\nBand 정보 가져오기main.py의 첫번째 부분은 Band 의 정보를 가져오는 부분이다.각 Band마다 고유한 ID값을 부여받는데 이 ID를 이용해 해당 Band 의 정보와 포스팅을 가져올 수 있다.\n12345#main.pyimport bandCrawler as bcband_ID = bc.getBandInfo()band_Post = bc.getBandPost(band_ID, bc.band_token)\n\nbandCrawler.py 에서는 request 모듈을 이용해 Access Token을 가지고 Band 포스팅을 가져온다.필요한 토큰값은 로컬파일로 저장된 내용을 불러와 변수에 담아서 사용하였다. env 관련 내용은 뒤쪽에서 다룬다.\n123456789101112131415# bandCrawler.py# 타겟 Band의 ID를 얻는 함수def getBandInfo():    band_list_url = \"https://openapi.band.us/v2.1/bands?access_token=\" + band_token    list_req = urllib.request.Request(band_list_url)    list_res = urllib.request.urlopen(list_req)    decoded_list = list_res.read().decode(\"utf8\")    bandlist_json = json.loads(decoded_list)    target_id = bandlist_json['result_data']['bands'][0]['band_key']    return target_id\n이후, 전달받은 BandID 를 이용해 포스팅을 가져온다.API문서에 의하면 한번에 불러올 수 있는 포스팅은 10개이다.새글 빈도가 매우 잦은 밴드는 아니라 약 10분에 한번인 새로고침 주기를 고려할 떄 충분한 숫자라 판단하였다.\n1234567891011121314# bandCrawler.py# 전달받은 BandID 를 이용해 포스팅을 가져오는 함수def getBandPost(target_id, band_token):    post_list_url = \"https://openapi.band.us/v2/band/posts?access_token=\" + band_token + \"&amp;band_key=\" + target_id + \"&amp;locale=ko_KR\"    post_req = urllib.request.Request(post_list_url)    post_res = urllib.request.urlopen(post_req)    decoded_post = post_res.read().decode(\"utf8\")    # print(decoded_post)    postlist_json = json.loads(decoded_post)    # print(postlist_json)    return postlist_json\n전달받은 Post 내용이 담긴 JSON 객체를 가공하는 부분이다.필요한 정보를 객체로 묶어서 리턴하도록 하였다.전달받은 데이터 중, createdate의 경우에는 milisec 로 되어있어 알아보기 쉽게 DATE 로 변환하는 함수 mil_to_date 를 만들어서 적용하였다.\n1234567891011121314151617181920# bandCrawler.py# 데이터를 가공하는 부분def makeData(postlist_json):    author = postlist_json['author']['name']    postkey = postlist_json['post_key']    content = postlist_json['content']    createdate = mil_to_date(postlist_json['created_at'])  # milisecond, long    photos = getPhotoUrl(postlist_json['photos'])  # 사진의 url이 담긴 배열을 리턴    return &#123;        'author': author,        'postkey': postkey,        'content': content,        'createdate': createdate,        'photos': photos    &#125;def mil_to_date(milliseconds):    return str(datetime.fromtimestamp(milliseconds // 1000))\n이렇게 작성된 makeData 함수는 main()에서 for loop 를 돌며 사용된다.\n123456789# main.pyimport bc as bandCrawler.pyfor i in band_Post['result_data']['items']:   temp = bc.makeData(i)  # 1개의 처리 데이터를 임시로 딕셔너리 형태로 저장.   postkey = temp.get('postkey')   createdate = temp.get('createdate')   photos = temp.get('photos')   #이하생략\n\n분석하기중복처리본격적으로 데이터가 준비되었으면 분석에 들어간다.분석에 앞서서 이미 처리한적이 있는 포스팅인지 DB를 조회하여 확인한다.\n12345678910# main.pyimport db.py as dbisExist = db.search_postkey(postkey)  # 0 || 1   if (isExist == 1):  # 이미 등록된 글이면      print(\"Already exists\")      continue   else:  # 새글일 경우 분석로직 시작      db.insertPost(postkey, createdate)   #이하생략\nDB쪽은 단순하다. count 를 이용하여 그 갯수를 리턴하도록 하였다.\n123456789101112131415# db.pydef search_postkey(postkey):    query = \"SELECT COUNT(*) as count FROM Band WHERE post_id='\" + postkey + \"';\"    db.cursor.execute(query)    result = db.cursor.fetchall()    return result[0]['count']def insertPost(postkey, createdate):    query = \"INSERT INTO Band (date, post_id) VALUES ('%s', '%s');\" % (createdate, postkey)    print(query)    db.cursor.execute(query)    db.conn.commit()\n\n분석실절적인 분석은 정규표현식을 이용하였다.Posting에서 실질적인 본문에 해당하는 Content 부분을 전달한다.\n1234# main.pyimport parseAddress.py as parseparsed_address = parse.parseAddress(temp['content'])  # 정규표현식에 의한 주소 파싱(str)\n가장 시간이 많이 걸렸고, 시행착오도 많았다.\n보통 우리가 처리해야할 포스팅인가를 판단하는 기준은 도로명주소 또는 회사명 언급 정도였다.예를들어서 세종대로 1 이렇게 적혀있는경우 또는 한국기업 님 처리 부탁드립니다 와 같다.\n처음에는 도로명주소 및 지번주소 모두를 처리하기 위하여 정규식을 만들었으나 조건을 너무 널널하게 한 나머지 도로명 주소 이외에도 전혀 상관없는 콘텐츠까지 알림이 오는 일이 발생하였다.\n결국 지도를 보고 실제로 우리가 처리해야하는 주소값 데이터는 그렇게 다양하지 않다는 것을 알게되어(5개 정도) 해당 데이터를 직접 정규식에 넣기로 하였다.\n이때의 문제점은 도로라는게 여러 지역에 걸쳐서 길게 뻗어있기 때문에 종종 해당되지 않는 포스팅도 우리지역으로 판단되어 알림이 간다는 문제가있다. \n이를 해결하기 위하여 다른 유저의 업무에 해당하는 포스팅을 판정하는 키워드 몇개를 이용하여 정규표현식을 만들어 해당 조건에 걸릴 경우 None을 리턴하도록 하였다.\n예시 코드에서 정규식 부분은 임의의 단어로 치환하였다.실제 코드에서는 정규표현식으로 도로명주소에 해당하는 몇몇 키워드를 넣어서 해당 도로명주소가 들어있는 내용일 경우 그 단어를 리턴하도록 하였다.\n1234567891011121314151617#parseAddress.pyimport redef parseAddress(content):    p = re.compile('여기에|예외조건|입력|세종대로|을지로|안국동길|등등')    q = re.compile('예외조건|키워드|입력')# 예외조건    reg_res = p.search(content)    except_res = q.search(content)    if reg_res:        m = reg_res.group()        if except_res: # 예외조건에 해당하는 경우 None 리턴            print(\"Not our business!!\")            return None        # print(m)        return m    else:        return None\n\n텔레그램 메시지 전송파싱된 데이터를 가지고 전달할 메시지를 만든다.main.py에서 사용되는 bot 함수들은 bot.py 에 정의해두었다.\nparsed_address의 결과가 존재할때만 메시지를 생성하도록 하였다.bot.py의 sendMessage(text) 함수에서 parse_mode 파라미터를 HTML 로 두었기 때문에 간단한 HTML 태그를 이용하여 메시지 가독성을 높일 수 있었다.\n12345678# main.pyimport bot as bot.pyif (parsed_address != None):    text = \"\"\"&lt;b&gt;새로운 민원이 등록되었습니다!&lt;/b&gt;\\n&lt;b&gt;찾은 단어 : %s&lt;/b&gt;\\n\\n&lt;b&gt;작성자 :&lt;/b&gt; %s\\n&lt;b&gt;등록일 :&lt;/b&gt; %s\\n&lt;b&gt;내용 :&lt;/b&gt; \\n%s\\n\"\"\" \\            % (parsed_address, temp['author'], temp['createdate'], temp['content'])    bot.sendMessage(text)    #이하생략\n\n이미지의 경우 밴드 API에서 jpeg 확장자의 URL이 담긴 배열을 리턴한다.이를 통째로 sendImage(imgArr) 함수로 전달하여 이미지그룹을 전달하도록 하였다.\n처음엔 단순히 sendPhoto 메소드를 사용하였으나, 여러개의 이미지가 동시에 전달될 경우 각각의 메시지로 따로 전송되어 채팅창에 도배되는 현상이 발생하여 sendMediaGroup 메소드로 교체하였다.\nAPI 문서를 읽어보면 sendMediaGroup 메소드를 사용하기 위해서는 media 파라미터로 InputMedia 객체가 담긴 배열을 전달해줘야 한다. 이를 위해 sendImage 함수에서 전달받은 이미지 배열을 for 루프를 통해 InputMediaPhoto 객체를만들어 배열에 추가한뒤 전송하는 방법을 이용했다.\n123456789101112# bot.pyimport env, telegramdef sendMessage(message):    bot.sendMessage(chat_id = channel_id, text=message, parse_mode=telegram.ParseMode.HTML)def sendImage(url):    InputMediaPhotoObjList = []    for i in range(len(url)):        InputMediaPhotoObjList.append(telegram.InputMediaPhoto(url[i]))    bot.sendMediaGroup(chat_id=channel_id, media=InputMediaPhotoObjList, disable_notification=True, timeout=30)\n\n마지막으로 main.py에서 sendImage 부분을 try - except 구문으로 에러핸들링을 해주었다. 이미지가 많거나, 용량이 큰 경우 종종 텔레그램 서버측에서 Timeout을 리턴하는 경우가 있어 에러상황에서도 프로그램이 죽지않고 다음 루프를 계속 돌 수 있도록 하였다.\n1234567#main.py   if len(photos) &gt; 0:      try :         bot.sendImage(photos)      except:         print(\"Timeout\")\n\n후처리후처리라고 거창하게 적었지만 DB 컬럼 한줄 업데이트하는 구문이다. 메시지를 보낸것은 보냈다고 업데이트 해주었다.\n12# main.py   db.afterSend(postkey)\n\n123456# db.pydef afterSend(postkey: int):    query = \"UPDATE Band SET isAlert = 1 WHERE post_id = '%s';\" % (postkey)    db.cursor.execute(query)    db.conn.commit()\n\n토큰관리각종 토큰이나 DB 접근에 관련한 파라미터들은 소스코드에 포함되서는 안되므로 별도의 파일에 저장해두고 env.py로 하여금 꺼내쓰도록 하였다.\ncrontab에서 python 파일을 실행할 경우 절대경로를 입력해줘야 하므로 os모듈에서 getcwd() 메소드를 사용하였다.다만, 개발을 진행했던 우분투 가상머신의 경로와 실제로 서비스할 라즈베리파이에서의 경로가 조금 달라 매번 고쳐쓰기 불편하여 try - except 문으로 처리했다.\n1234567891011121314151617181920# env.pyimport osdef openenv():    try:        return open(os.getcwd()+\"/BandCrawler/env\", \"r\") #Crontab 실행환경은 절대경로를 입력해야한다.    except:        return open(os.getcwd() + \"/env\", \"r\") # 개발환경def getenv(file):    env = &#123;&#125;    lines = file.readlines() # 줄별로 읽어서 배열로 리턴    env['band_token'] = lines[0][:-1]    env['db_usr'] = lines[1][:-1]    env['db_pwd'] = lines[2][:-1]    env['db_name'] = lines[3][:-1]    env['telegram_token'] = lines[4][:-1]    env['channel_id'] = lines[5]    return env\n\n실행!!위에서 적었듯이 서비스는 집에서 굴러다니는 라즈베리파이에 올려주었다. 주기적으로 게시글을 가져오기 위하여 crontab 을 이용해 10분마다 main.py를 실행하도록 하였으며 실행과정에서 나오는 로그를 crontab.log 에 기록하도록 하였다.\n/10 * * * * python3 /home/pi/BandCrawler/main.py &gt;&gt; /home/pi/BandCrawler/cronlog.log 2&gt;&amp;1\n로그도 만족스럽게 잘 찍히고 있다.\n메시지도 10분 주기로 잘 들어온다.(불필요한 내용은 편집했다.)\n마무리사실 개발을 시작한건 한두주 전이었는데 그사이 개인적인 일이 많아 마무리를 짓지 못하고 3월이 되어버렸다.마침 개강도 연기된 덕에 끝마무리를 지을 수 있어서 다행이다.\n아버지께서도 평소보다 메신저에 신경쓰지 않고 훨씬 효율적인 업무를 하실 수 있게 되어 만족하실 것 같다.\n가능하다면 정규표현식 쪽을 좀 더 다듬어서 정확한 알림서비스를 구현하고, 성공한다면 주소파싱을 통해 지도API를 이용해 정확한 위치를 찍어서 같이 공유하는 기능을 추가할 계획이다.\n추가로 DB구조도 다듬어서 알림을 보냈거나 그러지 않은 이유를 같이 기록하게 개선하면 좋을 것 같다.\n","dateCreated":"2020-03-03T18:23:21+09:00","dateModified":"2020-07-26T04:26:32+09:00","datePublished":"2020-03-03T18:23:21+09:00","description":"이 글은 아버지께서 근무하시는 환경을 좀 더 개선할 수 없을까 고민하다가 만들어본 ‘Naver Band 키워드 알림봇” 토이 프로젝트의 후기입니다.","headline":"Naver Band API와 텔레그램을 이용한 맞춤형 새글 알림 챗봇 제작기","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"https://zerogyun.dev/2020/03/03/Naver-Band-%ED%81%AC%EB%A1%A4%EB%9F%AC-%EC%A0%9C%EC%9E%91%EA%B8%B0/"},"publisher":{"@type":"Organization","name":"zerogyun","sameAs":["https://github.com/cxz7720","mailto:admin@zerogyun.dev"],"image":"https://avatars1.githubusercontent.com/u/29659112?s=460&v=4","logo":{"@type":"ImageObject","url":"https://avatars1.githubusercontent.com/u/29659112?s=460&v=4"}},"url":"https://zerogyun.dev/2020/03/03/Naver-Band-%ED%81%AC%EB%A1%A4%EB%9F%AC-%EC%A0%9C%EC%9E%91%EA%B8%B0/","keywords":"Band, python, bot, telegram, python-telegram-bot, 챗봇"}</script>
+    <meta name="description" content="이 글은 아버지께서 근무하시는 환경을 좀 더 개선할 수 없을까 고민하다가 만들어본 ‘Naver Band 키워드 알림봇” 토이 프로젝트의 후기입니다.">
+<meta property="og:type" content="blog">
+<meta property="og:title" content="Naver Band API와 텔레그램을 이용한 맞춤형 새글 알림 챗봇 제작기">
+<meta property="og:url" content="https://zerogyun.dev/2020/03/03/Naver-Band-%ED%81%AC%EB%A1%A4%EB%9F%AC-%EC%A0%9C%EC%9E%91%EA%B8%B0/index.html">
+<meta property="og:site_name" content="사다리타기">
+<meta property="og:description" content="이 글은 아버지께서 근무하시는 환경을 좀 더 개선할 수 없을까 고민하다가 만들어본 ‘Naver Band 키워드 알림봇” 토이 프로젝트의 후기입니다.">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:image" content="https://user-images.githubusercontent.com/29659112/75741587-687bd680-5d4e-11ea-9626-47df4b36944a.png">
+<meta property="og:image" content="https://user-images.githubusercontent.com/29659112/75742318-9e21bf00-5d50-11ea-841b-8806db9027d0.png">
+<meta property="og:image" content="https://user-images.githubusercontent.com/29659112/75742740-dece0800-5d51-11ea-88b1-a2ad245bd7ce.png">
+<meta property="og:image" content="https://user-images.githubusercontent.com/29659112/75757126-2023df00-5d75-11ea-93d8-ba5d790d3c96.png">
+<meta property="og:image" content="https://user-images.githubusercontent.com/29659112/75777813-fdf08800-5d99-11ea-9f2c-740ca9c970cc.jpg">
+<meta property="article:published_time" content="2020-03-03T09:23:21.000Z">
+<meta property="article:modified_time" content="2020-07-25T19:26:32.844Z">
+<meta property="article:author" content="zerogyun">
+<meta property="article:tag" content="Band">
+<meta property="article:tag" content="python">
+<meta property="article:tag" content="bot">
+<meta property="article:tag" content="telegram">
+<meta property="article:tag" content="python-telegram-bot">
+<meta property="article:tag" content="챗봇">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://user-images.githubusercontent.com/29659112/75741587-687bd680-5d4e-11ea-9626-47df4b36944a.png">
+    
+    
+        
+    
+    
+        <meta property="og:image" content="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4">
+    
+    
+    
+    
+    <!--STYLES-->
+    
+<link rel="stylesheet" href="/assets/css/style-gfvy1paadnhrenematj51np8g8cfvu4k1avie6z7jqeilszkarsav8zxtmuu.min.css">
+
+    <!--STYLES END-->
+    
+    <script async src="https://www.googletagmanager.com/gtag/js?id=UA-126694602-3"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+
+        gtag('config', 'UA-126694602-3');
+    </script>
+
+
+    
+
+    
+        
+    
+</head>
+
+    <body>
+        <div id="blog">
+            <!-- Define author's picture -->
+
+
+    
+        
+            
+        
+    
+
+<header id="header" data-behavior="5">
+    <i id="btn-open-sidebar" class="fa fa-lg fa-bars"></i>
+    <div class="header-title">
+        <a class="header-title-link" href="/" aria-label>
+            사다리타기
+        </a>
+    </div>
+    
+        
+            <a class="header-right-picture " href="#about" aria-label="링크 열기: /#about">
+        
+        
+            <img class="header-picture" src="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4" alt="저자 이미지">
+        
+        </a>
+    
+</header>
+
+            <!-- Define author's picture -->
+
+
+
+        
+    
+
+<nav id="sidebar" data-behavior="5">
+    <div class="sidebar-container">
+        
+            <div class="sidebar-profile">
+                <a href="/#about" aria-label="저자에 대해 더 알아보기">
+                    <img class="sidebar-profile-picture" src="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4" alt="저자 이미지">
+                </a>
+                <h4 class="sidebar-profile-name">zerogyun</h4>
+                
+                    <h5 class="sidebar-profile-bio"><p>문과생은 코딩을 추구하면 안되는걸까🎉🎉😎</p>
+</h5>
+                
+            </div>
+        
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="/" rel="noopener" title="Home">
+                        <i class="sidebar-button-icon fa fa-home" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Home</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="/all-categories" rel="noopener" title="카테고리">
+                        <i class="sidebar-button-icon fa fa-bookmark" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">카테고리</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="/all-tags" rel="noopener" title="태그">
+                        <i class="sidebar-button-icon fa fa-tags" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">태그</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="https://zerogyun.dev/profile" rel="noopener" title="About">
+                        <i class="sidebar-button-icon fa fa-question" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">About</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="https://github.com/cxz7720" target="_blank" rel="external nofollow noopener noreferrer" title="GitHub">
+                        <i class="sidebar-button-icon fab fa-github" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">GitHub</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="mailto:admin@zerogyun.dev" target="_blank" rel="noopener" title="Mail">
+                        <i class="sidebar-button-icon fa fa-envelope" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Mail</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+    </div>
+</nav>
+
+            
+            <div id="main" data-behavior="5" class="
+                        hasCoverMetaIn
+                        ">
+                
+<article class="post">
+    
+    
+        <div class="post-header main-content-wrap text-left">
+    
+        <h1 class="post-title">
+            Naver Band API와 텔레그램을 이용한 맞춤형 새글 알림 챗봇 제작기
+        </h1>
+    
+    
+        <div class="post-meta">
+    <time datetime="2020-03-03T18:23:21+09:00">
+	
+		    2020/03/03
+    	
+    </time>
+    
+        <span>카테고리 </span>
+        
+    <a class="category-link" href="/categories/Python-chatbot/">Python chatbot</a>
+
+
+    
+</div>
+
+    
+</div>
+
+    
+    <div class="post-content markdown">
+        <div class="main-content-wrap">
+            <p>이 글은 아버지께서 근무하시는 환경을 좀 더 개선할 수 없을까 고민하다가 만들어본 ‘Naver Band 키워드 알림봇” 토이 프로젝트의 후기입니다.</p>
+<a id="more"></a>
+<h1 id="네이버-Band의-새글알림을-선택적으로-받기"><a href="#네이버-Band의-새글알림을-선택적으로-받기" class="headerlink" title="네이버 Band의 새글알림을 선택적으로 받기"></a>네이버 Band의 새글알림을 선택적으로 받기</h1><p>슬랙이나 카카오톡처럼 키워드 알림을 설정할수 없는 Band에서는 자신이 원하는 글이 등록되었을 때 선택적으로 알림을 받을 수 있는 방법이 없습니다.</p>
+<p>Band에 등록된 글 중, 우리가 확인해야 할 게시글이 올라왔는지 알기 어려워 수시로 들어가야 하는 불편함이 있어 새글알림 봇을 만들게 되었습니다.<br>해당 업무 특성상 새롭게 올라온 글은 실시간으로 확인하여 처리해야할 필요가 있어서 다른 업무중에도 수시로 들어가서 확인해야 하는 불편함이 있다고 하셨습니다.</p>
+<p>물론 Band 에도 사용자를 직접 태그하여 해당 유저에게 알림이 가도록 하는 방법이 있으나 </p>
+<ul>
+<li>글 작성자가 불특정 다수인 경우라 모든 사람이 해당 유저를 태그해준다는 보장이 없었으며</li>
+<li>올라오는 글의 특성상 어떤 유저에게 해당하는 포스팅인지 업무담당자 이외에는 판단하기 힘든 부분이 많아 잘못된 유저가 태그될 가능성이 높습니다.</li>
+</ul>
+<p>때문에 유저가 자신에게 해당하는 글이 올라왔을때에만 확인하도록 하는것이 가장 효과적인 방법이라고 판단하고 프로젝트를 구성하였습니다.</p>
+<h3 id="1-Band-API-토큰-발급"><a href="#1-Band-API-토큰-발급" class="headerlink" title="1. Band API 토큰 발급"></a>1. Band API 토큰 발급</h3><p>네이버 Band API 토큰은 아래 링크에서 발급받을 수 있습니다.<br><a href="https://developers.band.us/" target="_blank" rel="external nofollow noopener noreferrer">https://developers.band.us/</a><br>처음엔 API의 존재를 모르고 BS4나 Selenium 을 이용해서 크롤링 할 생각에 고민이었습니다만, 다행히도 API를 제공해서 손쉽게 포스팅을 불러올 수 있었습니다.</p>
+<p>간단한 서비스 등록 양식을 작성하면 바로 토큰이 발급되어 사용할 수 있습니다.<br><img src="https://user-images.githubusercontent.com/29659112/75741587-687bd680-5d4e-11ea-9626-47df4b36944a.png" alt="image"></p>
+<h3 id="2-서비스-구성도"><a href="#2-서비스-구성도" class="headerlink" title="2. 서비스 구성도"></a>2. 서비스 구성도</h3><p><img src="https://user-images.githubusercontent.com/29659112/75742318-9e21bf00-5d50-11ea-841b-8806db9027d0.png" alt="Untitled Diagram"></p>
+<p>프로젝트의 구성도이다.</p>
+<ol>
+<li>토큰을 이용해 Band ID를 가져오고</li>
+<li>Band ID를 이용해 Post 목록을 불러와 리스트에 담는다.</li>
+<li>각 Post의 ID값을 DB목록과 대조하여 이미 조회한(검사한) 포스트일경우 <code>continue</code></li>
+<li>DB에 등록되지 않은 새로은 포스트일 경우 Content 를 분석하여 우리 회사에 해당하는 글인지 검사</li>
+<li>우리회사에 해당하는 글이라면 Telegram Bot 메시지 전송, 아니라면 다음 Iteration 진행.</li>
+<li>리스트의 마지막까지 반복</li>
+<li>전체 과정을 지정된 시간마다 반복</li>
+</ol>
+<p>으로 계획했다.</p>
+<p>주기적으로 새글을 가져와야해서 7번 과정은 crontab 으로 구현하였고, 매번 글을 가져올때마다 이미 분석해서 판단이 완료된 포스팅은 중복처리를 방지하기 위하여 별도로 DB에 기록하여 비교하는 과정을 추가하였다.</p>
+<h3 id="3-개발"><a href="#3-개발" class="headerlink" title="3. 개발"></a>3. 개발</h3><p>대학교 1학년때 처음 배운 Python3 로 프로젝트를 시작했다. 그때 배운 뒤로는 한번도 제대로 파이썬을 프로젝트에서 사용해본 적이 없어서 다시 공부하며 진행했다.😂😂😂</p>
+<h4 id="python-telegram-bot-패키지"><a href="#python-telegram-bot-패키지" class="headerlink" title="python-telegram-bot 패키지"></a>python-telegram-bot 패키지</h4><p>처음 개발환경은 윈도우노트북에서 진행하였으며 실제 서비스 환경은 Raspberry PI 3에서 굴리기로 하였다.</p>
+<p>그런데 꼭 필요한 python-telegram-bot 패키지가 pychram 에서 도통 설치가 되지 않는 문제가 계속 반복되었다.<br>에러 로그를 확인해보니 cryptography 패키지를 설치하는데서 발생하는 문제였는데, .NET Framework를 설치해서 해결하라는 StackOverflow 답변대로 해보았지만 별다른 도움이 되지 못했다.<br><img src="https://user-images.githubusercontent.com/29659112/75742740-dece0800-5d51-11ea-88b1-a2ad245bd7ce.png" alt="image"></p>
+<p>결국 윈도우 개발환경을 포기하고 <strong>우분투 가상머신</strong>으로 넘어가서 해결하였다.</p>
+<h3 id="Band-정보-가져오기"><a href="#Band-정보-가져오기" class="headerlink" title="Band 정보 가져오기"></a>Band 정보 가져오기</h3><p>main.py의 첫번째 부분은 Band 의 정보를 가져오는 부분이다.<br>각 Band마다 고유한 ID값을 부여받는데 이 ID를 이용해 해당 Band 의 정보와 포스팅을 가져올 수 있다.</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">#main.py</span></span><br><span class="line"><span class="keyword">import</span> bandCrawler <span class="keyword">as</span> bc</span><br><span class="line"></span><br><span class="line">band_ID = bc.getBandInfo()</span><br><span class="line">band_Post = bc.getBandPost(band_ID, bc.band_token)</span><br></pre></td></tr></table></figure>
+
+<p><code>bandCrawler.py</code> 에서는 request 모듈을 이용해 Access Token을 가지고 Band 포스팅을 가져온다.<br>필요한 토큰값은 로컬파일로 저장된 내용을 불러와 변수에 담아서 사용하였다. env 관련 내용은 뒤쪽에서 다룬다.</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># bandCrawler.py</span></span><br><span class="line"><span class="comment"># 타겟 Band의 ID를 얻는 함수</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">getBandInfo</span><span class="params">()</span>:</span></span><br><span class="line">    band_list_url = <span class="string">"https://openapi.band.us/v2.1/bands?access_token="</span> + band_token</span><br><span class="line">    list_req = urllib.request.Request(band_list_url)</span><br><span class="line">    list_res = urllib.request.urlopen(list_req)</span><br><span class="line"></span><br><span class="line">    decoded_list = list_res.read().decode(<span class="string">"utf8"</span>)</span><br><span class="line"></span><br><span class="line">    bandlist_json = json.loads(decoded_list)</span><br><span class="line"></span><br><span class="line">    target_id = bandlist_json[<span class="string">'result_data'</span>][<span class="string">'bands'</span>][<span class="number">0</span>][<span class="string">'band_key'</span>]</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> target_id</span><br></pre></td></tr></table></figure>
+<p>이후, 전달받은 BandID 를 이용해 포스팅을 가져온다.<br>API문서에 의하면 한번에 불러올 수 있는 포스팅은 10개이다.<br>새글 빈도가 매우 잦은 밴드는 아니라 약 10분에 한번인 새로고침 주기를 고려할 떄 충분한 숫자라 판단하였다.</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># bandCrawler.py</span></span><br><span class="line"><span class="comment"># 전달받은 BandID 를 이용해 포스팅을 가져오는 함수</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">getBandPost</span><span class="params">(target_id, band_token)</span>:</span></span><br><span class="line">    post_list_url = <span class="string">"https://openapi.band.us/v2/band/posts?access_token="</span> + band_token + <span class="string">"&amp;band_key="</span> + target_id + <span class="string">"&amp;locale=ko_KR"</span></span><br><span class="line">    post_req = urllib.request.Request(post_list_url)</span><br><span class="line">    post_res = urllib.request.urlopen(post_req)</span><br><span class="line"></span><br><span class="line">    decoded_post = post_res.read().decode(<span class="string">"utf8"</span>)</span><br><span class="line">    <span class="comment"># print(decoded_post)</span></span><br><span class="line">    postlist_json = json.loads(decoded_post)</span><br><span class="line"></span><br><span class="line">    <span class="comment"># print(postlist_json)</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> postlist_json</span><br></pre></td></tr></table></figure>
+<p>전달받은 Post 내용이 담긴 JSON 객체를 가공하는 부분이다.<br>필요한 정보를 객체로 묶어서 리턴하도록 하였다.<br>전달받은 데이터 중, <code>createdate</code>의 경우에는 milisec 로 되어있어 알아보기 쉽게 DATE 로 변환하는 함수 <code>mil_to_date</code> 를 만들어서 적용하였다.</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># bandCrawler.py</span></span><br><span class="line"><span class="comment"># 데이터를 가공하는 부분</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">makeData</span><span class="params">(postlist_json)</span>:</span></span><br><span class="line"></span><br><span class="line">    author = postlist_json[<span class="string">'author'</span>][<span class="string">'name'</span>]</span><br><span class="line">    postkey = postlist_json[<span class="string">'post_key'</span>]</span><br><span class="line">    content = postlist_json[<span class="string">'content'</span>]</span><br><span class="line">    createdate = mil_to_date(postlist_json[<span class="string">'created_at'</span>])  <span class="comment"># milisecond, long</span></span><br><span class="line">    photos = getPhotoUrl(postlist_json[<span class="string">'photos'</span>])  <span class="comment"># 사진의 url이 담긴 배열을 리턴</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> &#123;</span><br><span class="line">        <span class="string">'author'</span>: author,</span><br><span class="line">        <span class="string">'postkey'</span>: postkey,</span><br><span class="line">        <span class="string">'content'</span>: content,</span><br><span class="line">        <span class="string">'createdate'</span>: createdate,</span><br><span class="line">        <span class="string">'photos'</span>: photos</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">mil_to_date</span><span class="params">(milliseconds)</span>:</span></span><br><span class="line">    <span class="keyword">return</span> str(datetime.fromtimestamp(milliseconds // <span class="number">1000</span>))</span><br></pre></td></tr></table></figure>
+<p>이렇게 작성된 <code>makeData</code> 함수는 <code>main()</code>에서 for loop 를 돌며 사용된다.</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># main.py</span></span><br><span class="line"><span class="keyword">import</span> bc <span class="keyword">as</span> bandCrawler.py</span><br><span class="line"></span><br><span class="line"><span class="keyword">for</span> i <span class="keyword">in</span> band_Post[<span class="string">'result_data'</span>][<span class="string">'items'</span>]:</span><br><span class="line">   temp = bc.makeData(i)  <span class="comment"># 1개의 처리 데이터를 임시로 딕셔너리 형태로 저장.</span></span><br><span class="line">   postkey = temp.get(<span class="string">'postkey'</span>)</span><br><span class="line">   createdate = temp.get(<span class="string">'createdate'</span>)</span><br><span class="line">   photos = temp.get(<span class="string">'photos'</span>)</span><br><span class="line">   <span class="comment">#이하생략</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="분석하기"><a href="#분석하기" class="headerlink" title="분석하기"></a>분석하기</h3><h4 id="중복처리"><a href="#중복처리" class="headerlink" title="중복처리"></a>중복처리</h4><p>본격적으로 데이터가 준비되었으면 분석에 들어간다.<br>분석에 앞서서 이미 처리한적이 있는 포스팅인지 DB를 조회하여 확인한다.</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># main.py</span></span><br><span class="line"><span class="keyword">import</span> db.py <span class="keyword">as</span> db</span><br><span class="line"></span><br><span class="line">isExist = db.search_postkey(postkey)  <span class="comment"># 0 || 1</span></span><br><span class="line">   <span class="keyword">if</span> (isExist == <span class="number">1</span>):  <span class="comment"># 이미 등록된 글이면</span></span><br><span class="line">      print(<span class="string">"Already exists"</span>)</span><br><span class="line">      <span class="keyword">continue</span></span><br><span class="line">   <span class="keyword">else</span>:  <span class="comment"># 새글일 경우 분석로직 시작</span></span><br><span class="line">      db.insertPost(postkey, createdate)</span><br><span class="line">   <span class="comment">#이하생략</span></span><br></pre></td></tr></table></figure>
+<p>DB쪽은 단순하다. count 를 이용하여 그 갯수를 리턴하도록 하였다.</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># db.py</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">search_postkey</span><span class="params">(postkey)</span>:</span></span><br><span class="line">    query = <span class="string">"SELECT COUNT(*) as count FROM Band WHERE post_id='"</span> + postkey + <span class="string">"';"</span></span><br><span class="line"></span><br><span class="line">    db.cursor.execute(query)</span><br><span class="line">    result = db.cursor.fetchall()</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> result[<span class="number">0</span>][<span class="string">'count'</span>]</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">insertPost</span><span class="params">(postkey, createdate)</span>:</span></span><br><span class="line">    query = <span class="string">"INSERT INTO Band (date, post_id) VALUES ('%s', '%s');"</span> % (createdate, postkey)</span><br><span class="line">    print(query)</span><br><span class="line">    db.cursor.execute(query)</span><br><span class="line"></span><br><span class="line">    db.conn.commit()</span><br></pre></td></tr></table></figure>
+
+<h4 id="분석"><a href="#분석" class="headerlink" title="분석"></a>분석</h4><p>실절적인 분석은 정규표현식을 이용하였다.<br>Posting에서 실질적인 본문에 해당하는 Content 부분을 전달한다.</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># main.py</span></span><br><span class="line"><span class="keyword">import</span> parseAddress.py <span class="keyword">as</span> parse</span><br><span class="line"></span><br><span class="line">parsed_address = parse.parseAddress(temp[<span class="string">'content'</span>])  <span class="comment"># 정규표현식에 의한 주소 파싱(str)</span></span><br></pre></td></tr></table></figure>
+<p>가장 시간이 많이 걸렸고, 시행착오도 많았다.</p>
+<p>보통 우리가 처리해야할 포스팅인가를 판단하는 기준은 도로명주소 또는 회사명 언급 정도였다.<br>예를들어서 <code>세종대로 1</code> 이렇게 적혀있는경우 또는 <code>한국기업 님 처리 부탁드립니다</code> 와 같다.</p>
+<p>처음에는 도로명주소 및 지번주소 모두를 처리하기 위하여 정규식을 만들었으나 조건을 너무 널널하게 한 나머지 도로명 주소 이외에도 전혀 상관없는 콘텐츠까지 알림이 오는 일이 발생하였다.</p>
+<p>결국 지도를 보고 실제로 우리가 처리해야하는 주소값 데이터는 그렇게 다양하지 않다는 것을 알게되어(5개 정도) 해당 데이터를 직접 정규식에 넣기로 하였다.</p>
+<p>이때의 문제점은 도로라는게 여러 지역에 걸쳐서 길게 뻗어있기 때문에 종종 해당되지 않는 포스팅도 우리지역으로 판단되어 알림이 간다는 문제가있다. </p>
+<p>이를 해결하기 위하여 다른 유저의 업무에 해당하는 포스팅을 판정하는 키워드 몇개를 이용하여 정규표현식을 만들어 해당 조건에 걸릴 경우 <code>None</code>을 리턴하도록 하였다.</p>
+<p>예시 코드에서 정규식 부분은 임의의 단어로 치환하였다.<br>실제 코드에서는 정규표현식으로 도로명주소에 해당하는 몇몇 키워드를 넣어서 해당 도로명주소가 들어있는 내용일 경우 그 단어를 리턴하도록 하였다.</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">#parseAddress.py</span></span><br><span class="line"><span class="keyword">import</span> re</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">parseAddress</span><span class="params">(content)</span>:</span></span><br><span class="line">    p = re.compile(<span class="string">'여기에|예외조건|입력|세종대로|을지로|안국동길|등등'</span>)</span><br><span class="line">    q = re.compile(<span class="string">'예외조건|키워드|입력'</span>)<span class="comment"># 예외조건</span></span><br><span class="line">    reg_res = p.search(content)</span><br><span class="line">    except_res = q.search(content)</span><br><span class="line">    <span class="keyword">if</span> reg_res:</span><br><span class="line">        m = reg_res.group()</span><br><span class="line">        <span class="keyword">if</span> except_res: <span class="comment"># 예외조건에 해당하는 경우 None 리턴</span></span><br><span class="line">            print(<span class="string">"Not our business!!"</span>)</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">None</span></span><br><span class="line">        <span class="comment"># print(m)</span></span><br><span class="line">        <span class="keyword">return</span> m</span><br><span class="line">    <span class="keyword">else</span>:</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">None</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="텔레그램-메시지-전송"><a href="#텔레그램-메시지-전송" class="headerlink" title="텔레그램 메시지 전송"></a>텔레그램 메시지 전송</h4><p>파싱된 데이터를 가지고 전달할 메시지를 만든다.<br><code>main.py</code>에서 사용되는 bot 함수들은 <code>bot.py</code> 에 정의해두었다.</p>
+<p><code>parsed_address</code>의 결과가 존재할때만 메시지를 생성하도록 하였다.<br><code>bot.py</code>의 <code>sendMessage(text)</code> 함수에서 <code>parse_mode</code> 파라미터를 HTML 로 두었기 때문에 간단한 HTML 태그를 이용하여 메시지 가독성을 높일 수 있었다.</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># main.py</span></span><br><span class="line"><span class="keyword">import</span> bot <span class="keyword">as</span> bot.py</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> (parsed_address != <span class="literal">None</span>):</span><br><span class="line">    text = <span class="string">"""&lt;b&gt;새로운 민원이 등록되었습니다!&lt;/b&gt;\n&lt;b&gt;찾은 단어 : %s&lt;/b&gt;\n\n&lt;b&gt;작성자 :&lt;/b&gt; %s\n&lt;b&gt;등록일 :&lt;/b&gt; %s\n&lt;b&gt;내용 :&lt;/b&gt; \n%s\n"""</span> \</span><br><span class="line">            % (parsed_address, temp[<span class="string">'author'</span>], temp[<span class="string">'createdate'</span>], temp[<span class="string">'content'</span>])</span><br><span class="line">    bot.sendMessage(text)</span><br><span class="line">    <span class="comment">#이하생략</span></span><br></pre></td></tr></table></figure>
+
+<p>이미지의 경우 밴드 API에서 jpeg 확장자의 URL이 담긴 배열을 리턴한다.<br>이를 통째로 <code>sendImage(imgArr)</code> 함수로 전달하여 이미지그룹을 전달하도록 하였다.</p>
+<p>처음엔 단순히 <code>sendPhoto</code> 메소드를 사용하였으나, 여러개의 이미지가 동시에 전달될 경우 각각의 메시지로 따로 전송되어 채팅창에 도배되는 현상이 발생하여 <code>sendMediaGroup</code> 메소드로 교체하였다.</p>
+<p><a href="https://python-telegram-bot.readthedocs.io/en/stable/telegram.bot.html#telegram.Bot.send_media_group" target="_blank" rel="external nofollow noopener noreferrer">API 문서를 읽어보면</a> <code>sendMediaGroup</code> 메소드를 사용하기 위해서는 <code>media</code> 파라미터로 <code>InputMedia</code> 객체가 담긴 배열을 전달해줘야 한다. 이를 위해 <code>sendImage</code> 함수에서 전달받은 이미지 배열을 for 루프를 통해 <code>InputMediaPhoto</code> 객체를만들어 배열에 추가한뒤 전송하는 방법을 이용했다.</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># bot.py</span></span><br><span class="line"><span class="keyword">import</span> env, telegram</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">sendMessage</span><span class="params">(message)</span>:</span></span><br><span class="line">    bot.sendMessage(chat_id = channel_id, text=message, parse_mode=telegram.ParseMode.HTML)</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">sendImage</span><span class="params">(url)</span>:</span></span><br><span class="line">    InputMediaPhotoObjList = []</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> i <span class="keyword">in</span> range(len(url)):</span><br><span class="line">        InputMediaPhotoObjList.append(telegram.InputMediaPhoto(url[i]))</span><br><span class="line">    bot.sendMediaGroup(chat_id=channel_id, media=InputMediaPhotoObjList, disable_notification=<span class="literal">True</span>, timeout=<span class="number">30</span>)</span><br></pre></td></tr></table></figure>
+
+<p>마지막으로 <code>main.py</code>에서 sendImage 부분을 try - except 구문으로 에러핸들링을 해주었다. 이미지가 많거나, 용량이 큰 경우 종종 텔레그램 서버측에서 Timeout을 리턴하는 경우가 있어 에러상황에서도 프로그램이 죽지않고 다음 루프를 계속 돌 수 있도록 하였다.</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">#main.py</span></span><br><span class="line"></span><br><span class="line">   <span class="keyword">if</span> len(photos) &gt; <span class="number">0</span>:</span><br><span class="line">      <span class="keyword">try</span> :</span><br><span class="line">         bot.sendImage(photos)</span><br><span class="line">      <span class="keyword">except</span>:</span><br><span class="line">         print(<span class="string">"Timeout"</span>)</span><br></pre></td></tr></table></figure>
+
+<h4 id="후처리"><a href="#후처리" class="headerlink" title="후처리"></a>후처리</h4><p>후처리라고 거창하게 적었지만 DB 컬럼 한줄 업데이트하는 구문이다. 메시지를 보낸것은 보냈다고 업데이트 해주었다.</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># main.py</span></span><br><span class="line">   db.afterSend(postkey)</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># db.py</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">afterSend</span><span class="params">(postkey: int)</span>:</span></span><br><span class="line">    query = <span class="string">"UPDATE Band SET isAlert = 1 WHERE post_id = '%s';"</span> % (postkey)</span><br><span class="line">    db.cursor.execute(query)</span><br><span class="line"></span><br><span class="line">    db.conn.commit()</span><br></pre></td></tr></table></figure>
+
+<h4 id="토큰관리"><a href="#토큰관리" class="headerlink" title="토큰관리"></a>토큰관리</h4><p>각종 토큰이나 DB 접근에 관련한 파라미터들은 소스코드에 포함되서는 안되므로 별도의 파일에 저장해두고 <code>env.py</code>로 하여금 꺼내쓰도록 하였다.</p>
+<p>crontab에서 python 파일을 실행할 경우 절대경로를 입력해줘야 하므로 os모듈에서 <code>getcwd()</code> 메소드를 사용하였다.<br>다만, 개발을 진행했던 우분투 가상머신의 경로와 실제로 서비스할 라즈베리파이에서의 경로가 조금 달라 매번 고쳐쓰기 불편하여 <code>try - except</code> 문으로 처리했다.</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># env.py</span></span><br><span class="line"><span class="keyword">import</span> os</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">openenv</span><span class="params">()</span>:</span></span><br><span class="line">    <span class="keyword">try</span>:</span><br><span class="line">        <span class="keyword">return</span> open(os.getcwd()+<span class="string">"/BandCrawler/env"</span>, <span class="string">"r"</span>) <span class="comment">#Crontab 실행환경은 절대경로를 입력해야한다.</span></span><br><span class="line">    <span class="keyword">except</span>:</span><br><span class="line">        <span class="keyword">return</span> open(os.getcwd() + <span class="string">"/env"</span>, <span class="string">"r"</span>) <span class="comment"># 개발환경</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">getenv</span><span class="params">(file)</span>:</span></span><br><span class="line">    env = &#123;&#125;</span><br><span class="line">    lines = file.readlines() <span class="comment"># 줄별로 읽어서 배열로 리턴</span></span><br><span class="line">    env[<span class="string">'band_token'</span>] = lines[<span class="number">0</span>][:<span class="number">-1</span>]</span><br><span class="line">    env[<span class="string">'db_usr'</span>] = lines[<span class="number">1</span>][:<span class="number">-1</span>]</span><br><span class="line">    env[<span class="string">'db_pwd'</span>] = lines[<span class="number">2</span>][:<span class="number">-1</span>]</span><br><span class="line">    env[<span class="string">'db_name'</span>] = lines[<span class="number">3</span>][:<span class="number">-1</span>]</span><br><span class="line">    env[<span class="string">'telegram_token'</span>] = lines[<span class="number">4</span>][:<span class="number">-1</span>]</span><br><span class="line">    env[<span class="string">'channel_id'</span>] = lines[<span class="number">5</span>]</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> env</span><br></pre></td></tr></table></figure>
+
+<h3 id="실행"><a href="#실행" class="headerlink" title="실행!!"></a>실행!!</h3><p>위에서 적었듯이 서비스는 집에서 굴러다니는 라즈베리파이에 올려주었다. 주기적으로 게시글을 가져오기 위하여 crontab 을 이용해 10분마다 <code>main.py</code>를 실행하도록 하였으며 실행과정에서 나오는 로그를 <code>crontab.log</code> 에 기록하도록 하였다.</p>
+<p><code>/10 * * * * python3 /home/pi/BandCrawler/main.py &gt;&gt; /home/pi/BandCrawler/cronlog.log 2&gt;&amp;1</code></p>
+<p>로그도 만족스럽게 잘 찍히고 있다.<br><img src="https://user-images.githubusercontent.com/29659112/75757126-2023df00-5d75-11ea-93d8-ba5d790d3c96.png" alt="cronlog"></p>
+<p>메시지도 10분 주기로 잘 들어온다.(불필요한 내용은 편집했다.)<br><img src="https://user-images.githubusercontent.com/29659112/75777813-fdf08800-5d99-11ea-9f2c-740ca9c970cc.jpg" alt="msg"></p>
+<h3 id="마무리"><a href="#마무리" class="headerlink" title="마무리"></a>마무리</h3><p>사실 개발을 시작한건 한두주 전이었는데 그사이 개인적인 일이 많아 마무리를 짓지 못하고 3월이 되어버렸다.<br>마침 개강도 연기된 덕에 끝마무리를 지을 수 있어서 다행이다.</p>
+<p>아버지께서도 평소보다 메신저에 신경쓰지 않고 훨씬 효율적인 업무를 하실 수 있게 되어 만족하실 것 같다.</p>
+<p>가능하다면 정규표현식 쪽을 좀 더 다듬어서 정확한 알림서비스를 구현하고, 성공한다면 주소파싱을 통해 지도API를 이용해 정확한 위치를 찍어서 같이 공유하는 기능을 추가할 계획이다.</p>
+<p>추가로 DB구조도 다듬어서 알림을 보냈거나 그러지 않은 이유를 같이 기록하게 개선하면 좋을 것 같다.</p>
+
+            
+
+
+        </div>
+    </div>
+    <div id="post-footer" class="post-footer main-content-wrap">
+        
+            <div class="post-footer-tags">
+                <span class="text-color-light text-small">태그</span><br>
+                
+    <a class="tag tag--primary tag--small t-link" href="/tags/Band/" rel="tag">Band</a> <a class="tag tag--primary tag--small t-link" href="/tags/bot/" rel="tag">bot</a> <a class="tag tag--primary tag--small t-link" href="/tags/python/" rel="tag">python</a> <a class="tag tag--primary tag--small t-link" href="/tags/python-telegram-bot/" rel="tag">python-telegram-bot</a> <a class="tag tag--primary tag--small t-link" href="/tags/telegram/" rel="tag">telegram</a> <a class="tag tag--primary tag--small t-link" href="/tags/%EC%B1%97%EB%B4%87/" rel="tag">챗봇</a>
+
+            </div>
+        
+
+        <!-- 커스터마이징 해본 관련 글 영역-->
+        
+        
+        <!-- 끝 -->
+        
+        
+            <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a class="post-action-btn btn btn--default tooltip--top" href="/2020/03/31/TIL/" data-tooltip="[TIL] 2020/03/31" aria-label="이전: [TIL] 2020/03/31">
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">이전</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a class="post-action-btn btn btn--default tooltip--top" href="/2020/02/26/Flutter%20%EC%9B%B9%20%EA%B0%9C%EB%B0%9C%20%ED%9B%84%EA%B8%B0%20copy/" data-tooltip="Flutter 웹 개발 후기" aria-label="다음: Flutter 웹 개발 후기">
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">다음</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a class="post-action-btn btn btn--default btn-open-shareoptions" href="#btn-open-shareoptions" aria-label="이 포스트 공유하기">
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://www.facebook.com/sharer/sharer.php?u=https://zerogyun.dev/2020/03/03/Naver-Band-%ED%81%AC%EB%A1%A4%EB%9F%AC-%EC%A0%9C%EC%9E%91%EA%B8%B0/" title="Facebook에 공유하기" aria-label="Facebook에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://twitter.com/intent/tweet?text=https://zerogyun.dev/2020/03/03/Naver-Band-%ED%81%AC%EB%A1%A4%EB%9F%AC-%EC%A0%9C%EC%9E%91%EA%B8%B0/" title="Twitter에 공유하기" aria-label="Twitter에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://plus.google.com/share?url=https://zerogyun.dev/2020/03/03/Naver-Band-%ED%81%AC%EB%A1%A4%EB%9F%AC-%EC%A0%9C%EC%9E%91%EA%B8%B0/" title="Google+에 공유하기" aria-label="Google+에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+                <li class="post-action">
+                    <a class="post-action-btn btn btn--default" href="#disqus_thread" aria-label="댓글을 남겨주세요">
+                        <i class="fa fa-comment"></i>
+                    </a>
+                </li>
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="맨 위로">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+        
+        
+            
+                <div id="disqus_thread">
+    <noscript>Please enable JavaScript to view the <a href="//disqus.com/?ref_noscript" target="_blank" rel="noopener">comments powered by Disqus.</a></noscript>
+</div>
+            
+        
+    </div>
+</article>
+
+
+
+                <footer id="footer" class="main-content-wrap">
+    <span class="copyrights">
+        Copyrights &copy; 2020 zerogyun. All Rights Reserved.
+    </span>
+</footer>
+
+            </div>
+            
+                <div id="bottom-bar" class="post-bottom-bar" data-behavior="5">
+                    <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a class="post-action-btn btn btn--default tooltip--top" href="/2020/03/31/TIL/" data-tooltip="[TIL] 2020/03/31" aria-label="이전: [TIL] 2020/03/31">
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">이전</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a class="post-action-btn btn btn--default tooltip--top" href="/2020/02/26/Flutter%20%EC%9B%B9%20%EA%B0%9C%EB%B0%9C%20%ED%9B%84%EA%B8%B0%20copy/" data-tooltip="Flutter 웹 개발 후기" aria-label="다음: Flutter 웹 개발 후기">
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">다음</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a class="post-action-btn btn btn--default btn-open-shareoptions" href="#btn-open-shareoptions" aria-label="이 포스트 공유하기">
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://www.facebook.com/sharer/sharer.php?u=https://zerogyun.dev/2020/03/03/Naver-Band-%ED%81%AC%EB%A1%A4%EB%9F%AC-%EC%A0%9C%EC%9E%91%EA%B8%B0/" title="Facebook에 공유하기" aria-label="Facebook에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://twitter.com/intent/tweet?text=https://zerogyun.dev/2020/03/03/Naver-Band-%ED%81%AC%EB%A1%A4%EB%9F%AC-%EC%A0%9C%EC%9E%91%EA%B8%B0/" title="Twitter에 공유하기" aria-label="Twitter에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://plus.google.com/share?url=https://zerogyun.dev/2020/03/03/Naver-Band-%ED%81%AC%EB%A1%A4%EB%9F%AC-%EC%A0%9C%EC%9E%91%EA%B8%B0/" title="Google+에 공유하기" aria-label="Google+에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+                <li class="post-action">
+                    <a class="post-action-btn btn btn--default" href="#disqus_thread" aria-label="댓글을 남겨주세요">
+                        <i class="fa fa-comment"></i>
+                    </a>
+                </li>
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="맨 위로">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+                </div>
+                
+    <div id="share-options-bar" class="share-options-bar" data-behavior="5">
+        <i id="btn-close-shareoptions" class="fa fa-times"></i>
+        <ul class="share-options">
+            
+                
+                
+                <li class="share-option">
+                    <a class="share-option-btn" target="_blank" href="https://www.facebook.com/sharer/sharer.php?u=https://zerogyun.dev/2020/03/03/Naver-Band-%ED%81%AC%EB%A1%A4%EB%9F%AC-%EC%A0%9C%EC%9E%91%EA%B8%B0/" aria-label="Facebook에 공유하기" rel="external nofollow noopener noreferrer">
+                        <i class="fab fa-facebook" aria-hidden="true"></i><span>Facebook에 공유하기</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a class="share-option-btn" target="_blank" href="https://twitter.com/intent/tweet?text=https://zerogyun.dev/2020/03/03/Naver-Band-%ED%81%AC%EB%A1%A4%EB%9F%AC-%EC%A0%9C%EC%9E%91%EA%B8%B0/" aria-label="Twitter에 공유하기" rel="external nofollow noopener noreferrer">
+                        <i class="fab fa-twitter" aria-hidden="true"></i><span>Twitter에 공유하기</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a class="share-option-btn" target="_blank" href="https://plus.google.com/share?url=https://zerogyun.dev/2020/03/03/Naver-Band-%ED%81%AC%EB%A1%A4%EB%9F%AC-%EC%A0%9C%EC%9E%91%EA%B8%B0/" aria-label="Google+에 공유하기" rel="external nofollow noopener noreferrer">
+                        <i class="fab fa-google-plus" aria-hidden="true"></i><span>Google+에 공유하기</span>
+                    </a>
+                </li>
+            
+        </ul>
+    </div>
+
+
+            
+        </div>
+        
+
+
+    
+        
+    
+
+<div id="about">
+    <div id="about-card">
+        <div id="about-btn-close">
+            <i class="fa fa-times"></i>
+        </div>
+        
+            <img id="about-card-picture" src="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4" alt="저자 이미지">
+        
+            <h4 id="about-card-name">zerogyun</h4>
+        
+            <div id="about-card-bio"><p>문과생은 코딩을 추구하면 안되는걸까🎉🎉😎</p>
+</div>
+        
+        
+            <div id="about-card-job">
+                <i class="fa fa-briefcase"></i>
+                <br>
+                <p>Student</p>
+
+            </div>
+        
+        
+            <div id="about-card-location">
+                <i class="fa fa-map-marker-alt"></i>
+                <br>
+                Seoul, South Korea
+            </div>
+        
+    </div>
+</div>
+
+        
+        
+<div id="cover" style="background-image:url('https://user-images.githubusercontent.com/29659112/76057866-1e009100-5fbe-11ea-84fe-00462e469e66.png');"></div>
+        <!--SCRIPTS-->
+
+<script src="/assets/js/script-0b9br5vpq85plmwdvtw8yqgpyj40cgb2lzib27pnr2wpe2cbodzjvxx71b2q.min.js"></script>
+
+<!--SCRIPTS END-->
+
+
+    
+        <script>
+          var disqus_config = function() {
+            this.page.url = 'https://zerogyun.dev/2020/03/03/Naver-Band-%ED%81%AC%EB%A1%A4%EB%9F%AC-%EC%A0%9C%EC%9E%91%EA%B8%B0/';
+              
+            this.page.identifier = '2020/03/03/Naver-Band-크롤러-제작기/';
+              
+          };
+          (function() {
+            var d = document, s = d.createElement('script');
+            var disqus_shortname = 'cxz7720-github-io-1';
+            s.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+
+            s.setAttribute('data-timestamp', +new Date());
+            (d.head || d.body).appendChild(s);
+          })();
+        </script>
+    
+
+
+
+
+    </body>
+</html>

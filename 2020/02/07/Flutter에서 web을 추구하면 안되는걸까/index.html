@@ -1,0 +1,569 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+    
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="generator" content="사다리타기">
+    <title>Flutter 에서 WEB을 추구하면 안되는걸까 - 사다리타기</title>
+    <meta name="author" content="zerogyun">
+    <link rel="canonical" href="https://zerogyun.dev/2020/02/07/flutter에서 web을 추구하면 안되는걸까/">
+    
+    
+    
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"zerogyun","sameAs":["https://github.com/cxz7720","mailto:admin@zerogyun.dev"],"image":"https://avatars1.githubusercontent.com/u/29659112?s=460&v=4"},"articleBody":"Flutterl 를 이용해 웹페이지를 만들면서 배운점으 적어보았습니다.\n\nFlutter로 Web 개발을?!\n처음 Flutter 를 접한 건, Android와 IOS 개발을 한큐에!! 라는 문구에 끌려서였다.그런데 얼마 전, Flutter로도 WEB프로젝트를 할수 있다는 재미있는 글을 읽었다.\nAndroid와 IOS, 그리고 이젠 WEB까지 가능하다니!! 보면볼수록 팔색조같은 매력을 가진 Flutter인것 같다.\n\n오옷!!\n\n오늘 포스팅에서는 **Flutter 로 WEB개발을 추구하면 안될까?** 라는 주제로 간단한 프로젝트 생성하는 방법에 대해 적는다.\n\n\n\nFlutter 준비Flutter for WEB는 Flutter 버전 1.12 릴리즈부터 DEV 채널에서 BETA 채널로 옮겨졌다. 물론 아직까지는 BETA라서 불안정하거나 다듬어야 할 부분도 꽤 많지만, 그래도 DEV 에 있었을때 보다는 훨씬 많이 나아졌다. (링크)\nFlutter 프레임워크 업데이트먼저 Flutter를 이용해 WEB개발을 시작하기 위해서 기존의 Flutter 환경에서 BETA 채널로 업데이트가필요하다.Master 채널에서도 가능하다고 하지만 공식문서에서에서는 Framework 를 Beta로 업데이트할것을 권장하고 있다.\n글을쓰는 시점인 2020년 2월 현재, Beta채널은 1.14.6 버전까지 배포되어있다.\n12flutter channel betaflutter upgrade\n\nweb 개발기능 활성화 1flutter config --enable-web\n web support 를 활성화하면, flutter-doctor -v 명령어를 수행했을때 기존 Android Device 를 찾던것과 달리 Chrome 브라우저를 검출하게 된다.\n 아래는 내 개발환경에서 flutter doctor -v 명령어를 수행했을때의 출력결과이다.\n 1234567891011121314151617181920212223242526272829303132333435363738 D:\\DEV&gt;flutter doctor -v[√] Flutter (Channel beta, v1.14.6, on Microsoft Windows [Version 10.0.18363.628], locale ko-KR)    • Flutter version 1.14.6 at C:\\src\\flutter    • Framework revision fabeb2a16f (9 days ago), 2020-01-28 07:56:51 -0800    • Engine revision c4229bfbba    • Dart version 2.8.0 (build 2.8.0-dev.5.0 fc3af737c7)[√] Android toolchain - develop for Android devices (Android SDK version 29.0.2)    • Android SDK at C:\\Users\\kygha\\AppData\\Local\\Android\\sdk    • Android NDK location not configured (optional; useful for native profiling support)    • Platform android-29, build-tools 29.0.2    • Java binary at: C:\\Program Files\\Android\\Android Studio\\jre\\bin\\java    • Java version OpenJDK Runtime Environment (build 1.8.0_202-release-1483-b03)    • All Android licenses accepted.[√] Chrome - develop for the web    • Chrome at C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe[√] Android Studio (version 3.5)    • Android Studio at C:\\Program Files\\Android\\Android Studio    • Flutter plugin version 43.0.1    • Dart plugin version 191.8593    • Java version OpenJDK Runtime Environment (build 1.8.0_202-release-1483-b03)[√] IntelliJ IDEA Ultimate Edition (version 2019.3)    • IntelliJ at C:\\Program Files\\JetBrains\\IntelliJ IDEA 2019.2.2    • Flutter plugin version 43.0.3    • Dart plugin version 193.6015.53[√] VS Code (version 1.41.1)    • VS Code at C:\\Users\\kygha\\AppData\\Local\\Programs\\Microsoft VS Code    • Flutter extension version 3.8.0[√] Connected device (2 available)    • Chrome     • chrome     • web-javascript • Google Chrome 79.0.3945.130    • Web Server • web-server • web-javascript • Flutter Tools• No issues found!\n\n프로젝트 생성프로젝트 생성은 기존 Flutter 프로젝트를 만들던 것과 다르지 않다.\n1flutter create Flutter_web\n를 터미널에서 임력하거나,IntelliJ 같은 IDE를 사용한다면\n이런 과정을 거칠 것이다.Android 프로젝트같이 생겼지만 지금은 신경쓰지 않아도 된다.\n프로젝트를 생성하고나면, 다음과 같은 구조가 만들어진다.\n\n기존 앱을 만들때의 Flutter 구조와 다른점이라면 web 폴더가 생성되어있다. 그리고 IntellJ 기준, RUN 옵션에서 Target 을 지정하는 부분에 Chrome 을 선택할 수 있다.\n\n프로젝트 빌드위 사진처럼 Target Device를 WEB SERVER로 맞추고, 실행하면 자동으로 Flutter Framework 에서 컴파일을 거쳐 웹 브라우져로 실행시켜준다.\n터미널에서 직접 실행시킬때는\n1flutter run -d chrome\n로 실행시킬 수 있다.\n기존의 Flutter 앱 만들때와 같이 Hot reload 를 지원하기 때문에 IntelliJ 의 경우 Ctrl + S 를 누르면 자동으로 페이지가 Hot Reload 된다.\n터미널에서 실행시켤 경우 키보드 r 을 입력하면 자동으로 Hot reload 가 되며, Shift + R 을 누를 경우 Hot restart 가 된다.\n최종적으로 프로젝트를 빌드할 때는 \n123flutter build web또는flutter run --release\n\n명령어로 릴리즈빌드를 생성할 수 있다.\n프로젝트 예시그 후 개발은 기존 앱개발 할때와 마찬가지로 할 수 있다.다만 WEB 에서 지원하지 않는 부분들이 종종 있으니 확인해가면서 모듈을 이용할 필요가 있다.\n\n다른 솜씨좋은 개발자들의 Flutter WEB 프로젝트 예시는 아래 링크에서 확인할 수 있다.\nFlutter Web samples\n\n\n\n\n참고한 사이트Web support for FlutterWeb support for Flutter goes beta\n","dateCreated":"2020-02-07T18:23:21+09:00","dateModified":"2020-07-26T04:26:32+09:00","datePublished":"2020-02-07T18:23:21+09:00","description":"Flutterl 를 이용해 웹페이지를 만들면서 배운점으 적어보았습니다.","headline":"Flutter 에서 WEB을 추구하면 안되는걸까","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"https://zerogyun.dev/2020/02/07/Flutter%EC%97%90%EC%84%9C%20web%EC%9D%84%20%EC%B6%94%EA%B5%AC%ED%95%98%EB%A9%B4%20%EC%95%88%EB%90%98%EB%8A%94%EA%B1%B8%EA%B9%8C/"},"publisher":{"@type":"Organization","name":"zerogyun","sameAs":["https://github.com/cxz7720","mailto:admin@zerogyun.dev"],"image":"https://avatars1.githubusercontent.com/u/29659112?s=460&v=4","logo":{"@type":"ImageObject","url":"https://avatars1.githubusercontent.com/u/29659112?s=460&v=4"}},"url":"https://zerogyun.dev/2020/02/07/Flutter%EC%97%90%EC%84%9C%20web%EC%9D%84%20%EC%B6%94%EA%B5%AC%ED%95%98%EB%A9%B4%20%EC%95%88%EB%90%98%EB%8A%94%EA%B1%B8%EA%B9%8C/","keywords":"Flutter, web, dart"}</script>
+    <meta name="description" content="Flutterl 를 이용해 웹페이지를 만들면서 배운점으 적어보았습니다.">
+<meta property="og:type" content="blog">
+<meta property="og:title" content="Flutter 에서 WEB을 추구하면 안되는걸까">
+<meta property="og:url" content="https://zerogyun.dev/2020/02/07/Flutter%EC%97%90%EC%84%9C%20web%EC%9D%84%20%EC%B6%94%EA%B5%AC%ED%95%98%EB%A9%B4%20%EC%95%88%EB%90%98%EB%8A%94%EA%B1%B8%EA%B9%8C/index.html">
+<meta property="og:site_name" content="사다리타기">
+<meta property="og:description" content="Flutterl 를 이용해 웹페이지를 만들면서 배운점으 적어보았습니다.">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:image" content="https://user-images.githubusercontent.com/29659112/74025568-97b95500-49e7-11ea-99d1-fb97821ee34d.png">
+<meta property="og:image" content="https://user-images.githubusercontent.com/29659112/74019308-c4b33b00-49da-11ea-8857-e01b25ff2766.png">
+<meta property="og:image" content="https://user-images.githubusercontent.com/29659112/74022068-2033f780-49e0-11ea-8404-10665209136d.png">
+<meta property="og:image" content="https://user-images.githubusercontent.com/29659112/74022146-48235b00-49e0-11ea-9e59-0b37094e23da.png">
+<meta property="og:image" content="https://user-images.githubusercontent.com/29659112/74022842-bcaac980-49e1-11ea-956f-9dfd8cb2875f.png">
+<meta property="og:image" content="https://user-images.githubusercontent.com/29659112/74023175-5a05fd80-49e2-11ea-81d2-2080572e65c8.png">
+<meta property="article:published_time" content="2020-02-07T09:23:21.000Z">
+<meta property="article:modified_time" content="2020-07-25T19:26:32.844Z">
+<meta property="article:author" content="zerogyun">
+<meta property="article:tag" content="Flutter">
+<meta property="article:tag" content="web">
+<meta property="article:tag" content="dart">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://user-images.githubusercontent.com/29659112/74025568-97b95500-49e7-11ea-99d1-fb97821ee34d.png">
+    
+    
+        
+    
+    
+        <meta property="og:image" content="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4">
+    
+    
+    
+    
+    <!--STYLES-->
+    
+<link rel="stylesheet" href="/assets/css/style-gfvy1paadnhrenematj51np8g8cfvu4k1avie6z7jqeilszkarsav8zxtmuu.min.css">
+
+    <!--STYLES END-->
+    
+    <script async src="https://www.googletagmanager.com/gtag/js?id=UA-126694602-3"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+
+        gtag('config', 'UA-126694602-3');
+    </script>
+
+
+    
+
+    
+        
+    
+</head>
+
+    <body>
+        <div id="blog">
+            <!-- Define author's picture -->
+
+
+    
+        
+            
+        
+    
+
+<header id="header" data-behavior="5">
+    <i id="btn-open-sidebar" class="fa fa-lg fa-bars"></i>
+    <div class="header-title">
+        <a class="header-title-link" href="/" aria-label>
+            사다리타기
+        </a>
+    </div>
+    
+        
+            <a class="header-right-picture " href="#about" aria-label="링크 열기: /#about">
+        
+        
+            <img class="header-picture" src="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4" alt="저자 이미지">
+        
+        </a>
+    
+</header>
+
+            <!-- Define author's picture -->
+
+
+
+        
+    
+
+<nav id="sidebar" data-behavior="5">
+    <div class="sidebar-container">
+        
+            <div class="sidebar-profile">
+                <a href="/#about" aria-label="저자에 대해 더 알아보기">
+                    <img class="sidebar-profile-picture" src="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4" alt="저자 이미지">
+                </a>
+                <h4 class="sidebar-profile-name">zerogyun</h4>
+                
+                    <h5 class="sidebar-profile-bio"><p>문과생은 코딩을 추구하면 안되는걸까🎉🎉😎</p>
+</h5>
+                
+            </div>
+        
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="/" rel="noopener" title="Home">
+                        <i class="sidebar-button-icon fa fa-home" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Home</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="/all-categories" rel="noopener" title="카테고리">
+                        <i class="sidebar-button-icon fa fa-bookmark" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">카테고리</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="/all-tags" rel="noopener" title="태그">
+                        <i class="sidebar-button-icon fa fa-tags" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">태그</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="https://zerogyun.dev/profile" rel="noopener" title="About">
+                        <i class="sidebar-button-icon fa fa-question" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">About</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="https://github.com/cxz7720" target="_blank" rel="external nofollow noopener noreferrer" title="GitHub">
+                        <i class="sidebar-button-icon fab fa-github" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">GitHub</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="mailto:admin@zerogyun.dev" target="_blank" rel="noopener" title="Mail">
+                        <i class="sidebar-button-icon fa fa-envelope" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Mail</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+    </div>
+</nav>
+
+            
+            <div id="main" data-behavior="5" class="
+                        hasCoverMetaIn
+                        ">
+                
+<article class="post">
+    
+    
+        <div class="post-header main-content-wrap text-left">
+    
+        <h1 class="post-title">
+            Flutter 에서 WEB을 추구하면 안되는걸까
+        </h1>
+    
+    
+        <div class="post-meta">
+    <time datetime="2020-02-07T18:23:21+09:00">
+	
+		    2020/02/07
+    	
+    </time>
+    
+        <span>카테고리 </span>
+        
+    <a class="category-link" href="/categories/Flutter/">Flutter</a>
+
+
+    
+</div>
+
+    
+</div>
+
+    
+    <div class="post-content markdown">
+        <div class="main-content-wrap">
+            <p>Flutterl 를 이용해 웹페이지를 만들면서 배운점으 적어보았습니다.</p>
+<a id="more"></a>
+<h1 id="Flutter로-Web-개발을"><a href="#Flutter로-Web-개발을" class="headerlink" title="Flutter로 Web 개발을?!"></a>Flutter로 Web 개발을?!</h1><p><img src="https://user-images.githubusercontent.com/29659112/74025568-97b95500-49e7-11ea-99d1-fb97821ee34d.png" alt="flutterweb_blogtitle"></p>
+<p>처음 Flutter 를 접한 건, Android와 IOS 개발을 한큐에!! 라는 문구에 끌려서였다.<br>그런데 얼마 전, Flutter로도 WEB프로젝트를 할수 있다는 재미있는 글을 읽었다.</p>
+<p>Android와 IOS, 그리고 이젠 WEB까지 가능하다니!! 보면볼수록 팔색조같은 매력을 가진 Flutter인것 같다.</p>
+<center><img src="https://user-images.githubusercontent.com/29659112/74019308-c4b33b00-49da-11ea-8857-e01b25ff2766.png">
+오옷!!</center>
+<br>
+오늘 포스팅에서는 **Flutter 로 WEB개발을 추구하면 안될까?** 라는 주제로 간단한 프로젝트 생성하는 방법에 대해 적는다.
+
+<br>
+
+<h2 id="Flutter-준비"><a href="#Flutter-준비" class="headerlink" title="Flutter 준비"></a>Flutter 준비</h2><p>Flutter for WEB는 Flutter 버전 1.12 릴리즈부터 DEV 채널에서 BETA 채널로 옮겨졌다. 물론 아직까지는 BETA라서 불안정하거나 다듬어야 할 부분도 꽤 많지만, 그래도 DEV 에 있었을때 보다는 훨씬 많이 나아졌다. (<a href="https://medium.com/flutter/web-support-for-flutter-goes-beta-35b64a1217c0" target="_blank" rel="external nofollow noopener noreferrer">링크</a>)<br><br></p>
+<h3 id="Flutter-프레임워크-업데이트"><a href="#Flutter-프레임워크-업데이트" class="headerlink" title="Flutter 프레임워크 업데이트"></a>Flutter 프레임워크 업데이트</h3><p>먼저 Flutter를 이용해 WEB개발을 시작하기 위해서 기존의 Flutter 환경에서 BETA 채널로 업데이트가필요하다.<br>Master 채널에서도 가능하다고 하지만 공식문서에서에서는 Framework 를 Beta로 업데이트할것을 권장하고 있다.</p>
+<p>글을쓰는 시점인 2020년 2월 현재, Beta채널은 1.14.6 버전까지 배포되어있다.</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">flutter channel beta</span><br><span class="line">flutter upgrade</span><br></pre></td></tr></table></figure>
+
+<h3 id="web-개발기능-활성화"><a href="#web-개발기능-활성화" class="headerlink" title="web 개발기능 활성화"></a>web 개발기능 활성화</h3> <figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">flutter config --<span class="built_in">enable</span>-web</span><br></pre></td></tr></table></figure>
+<p> web support 를 활성화하면, <code>flutter-doctor -v</code> 명령어를 수행했을때 기존 Android Device 를 찾던것과 달리 Chrome 브라우저를 검출하게 된다.</p>
+<p> 아래는 내 개발환경에서 <code>flutter doctor -v</code> 명령어를 수행했을때의 출력결과이다.</p>
+ <figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line"> D:\DEV&gt;flutter doctor -v</span><br><span class="line">[√] Flutter (Channel beta, v1.14.6, on Microsoft Windows [Version 10.0.18363.628], locale ko-KR)</span><br><span class="line">    • Flutter version 1.14.6 at C:\src\flutter</span><br><span class="line">    • Framework revision fabeb2a16f (9 days ago), 2020-01-28 07:56:51 -0800</span><br><span class="line">    • Engine revision c4229bfbba</span><br><span class="line">    • Dart version 2.8.0 (build 2.8.0-dev.5.0 fc3af737c7)</span><br><span class="line"></span><br><span class="line">[√] Android toolchain - develop <span class="keyword">for</span> Android devices (Android SDK version 29.0.2)</span><br><span class="line">    • Android SDK at C:\Users\kygha\AppData\Local\Android\sdk</span><br><span class="line">    • Android NDK location not configured (optional; useful <span class="keyword">for</span> native profiling support)</span><br><span class="line">    • Platform android-29, build-tools 29.0.2</span><br><span class="line">    • Java binary at: C:\Program Files\Android\Android Studio\jre\bin\java</span><br><span class="line">    • Java version OpenJDK Runtime Environment (build 1.8.0_202-release-1483-b03)</span><br><span class="line">    • All Android licenses accepted.</span><br><span class="line"></span><br><span class="line">[√] Chrome - develop <span class="keyword">for</span> the web</span><br><span class="line">    • Chrome at C:\Program Files (x86)\Google\Chrome\Application\chrome.exe</span><br><span class="line"></span><br><span class="line">[√] Android Studio (version 3.5)</span><br><span class="line">    • Android Studio at C:\Program Files\Android\Android Studio</span><br><span class="line">    • Flutter plugin version 43.0.1</span><br><span class="line">    • Dart plugin version 191.8593</span><br><span class="line">    • Java version OpenJDK Runtime Environment (build 1.8.0_202-release-1483-b03)</span><br><span class="line"></span><br><span class="line">[√] IntelliJ IDEA Ultimate Edition (version 2019.3)</span><br><span class="line">    • IntelliJ at C:\Program Files\JetBrains\IntelliJ IDEA 2019.2.2</span><br><span class="line">    • Flutter plugin version 43.0.3</span><br><span class="line">    • Dart plugin version 193.6015.53</span><br><span class="line"></span><br><span class="line">[√] VS Code (version 1.41.1)</span><br><span class="line">    • VS Code at C:\Users\kygha\AppData\Local\Programs\Microsoft VS Code</span><br><span class="line">    • Flutter extension version 3.8.0</span><br><span class="line"></span><br><span class="line">[√] Connected device (2 available)</span><br><span class="line">    • Chrome     • chrome     • web-javascript • Google Chrome 79.0.3945.130</span><br><span class="line">    • Web Server • web-server • web-javascript • Flutter Tools</span><br><span class="line"></span><br><span class="line">• No issues found!</span><br></pre></td></tr></table></figure>
+
+<h2 id="프로젝트-생성"><a href="#프로젝트-생성" class="headerlink" title="프로젝트 생성"></a>프로젝트 생성</h2><p>프로젝트 생성은 기존 Flutter 프로젝트를 만들던 것과 다르지 않다.</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">flutter create Flutter_web</span><br></pre></td></tr></table></figure>
+<p>를 터미널에서 임력하거나,<br>IntelliJ 같은 IDE를 사용한다면<br><img src="https://user-images.githubusercontent.com/29659112/74022068-2033f780-49e0-11ea-8404-10665209136d.png" alt="project"></p>
+<p>이런 과정을 거칠 것이다.<br>Android 프로젝트같이 생겼지만 지금은 신경쓰지 않아도 된다.</p>
+<p>프로젝트를 생성하고나면, 다음과 같은 구조가 만들어진다.</p>
+<p><img src="https://user-images.githubusercontent.com/29659112/74022146-48235b00-49e0-11ea-9e59-0b37094e23da.png" alt="project structure"></p>
+<p>기존 앱을 만들때의 Flutter 구조와 다른점이라면 <code>web</code> 폴더가 생성되어있다. 그리고 IntellJ 기준, <strong>RUN</strong> 옵션에서 Target 을 지정하는 부분에 Chrome 을 선택할 수 있다.</p>
+<p><img src="https://user-images.githubusercontent.com/29659112/74022842-bcaac980-49e1-11ea-956f-9dfd8cb2875f.png" alt="image"></p>
+<h2 id="프로젝트-빌드"><a href="#프로젝트-빌드" class="headerlink" title="프로젝트 빌드"></a>프로젝트 빌드</h2><p>위 사진처럼 Target Device를 WEB SERVER로 맞추고, 실행하면 자동으로 Flutter Framework 에서 컴파일을 거쳐 웹 브라우져로 실행시켜준다.</p>
+<p>터미널에서 직접 실행시킬때는</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">flutter run -d chrome</span><br></pre></td></tr></table></figure>
+<p>로 실행시킬 수 있다.</p>
+<p>기존의 Flutter 앱 만들때와 같이 Hot reload 를 지원하기 때문에 IntelliJ 의 경우 <code>Ctrl + S</code> 를 누르면 자동으로 페이지가 Hot Reload 된다.</p>
+<p>터미널에서 실행시켤 경우 키보드 <code>r</code> 을 입력하면 자동으로 Hot reload 가 되며, <code>Shift + R</code> 을 누를 경우 Hot restart 가 된다.</p>
+<p>최종적으로 프로젝트를 빌드할 때는 </p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">flutter build web</span><br><span class="line">또는</span><br><span class="line">flutter run --release</span><br></pre></td></tr></table></figure>
+
+<p>명령어로 릴리즈빌드를 생성할 수 있다.</p>
+<h3 id="프로젝트-예시"><a href="#프로젝트-예시" class="headerlink" title="프로젝트 예시"></a>프로젝트 예시</h3><p>그 후 개발은 기존 앱개발 할때와 마찬가지로 할 수 있다.<br>다만 WEB 에서 지원하지 않는 부분들이 종종 있으니 확인해가면서 모듈을 이용할 필요가 있다.</p>
+<p><img src="https://user-images.githubusercontent.com/29659112/74023175-5a05fd80-49e2-11ea-81d2-2080572e65c8.png" alt="image"></p>
+<p>다른 솜씨좋은 개발자들의 Flutter WEB 프로젝트 예시는 아래 링크에서 확인할 수 있다.</p>
+<p><a href="https://flutter.github.io/samples/#/" target="_blank" rel="external nofollow noopener noreferrer">Flutter Web samples</a></p>
+<br>
+<br>
+<br>
+
+<h4 id="참고한-사이트"><a href="#참고한-사이트" class="headerlink" title="참고한 사이트"></a>참고한 사이트</h4><p><a href="https://flutter.dev/web" target="_blank" rel="external nofollow noopener noreferrer">Web support for Flutter</a><br><br><a href="https://medium.com/flutter/web-support-for-flutter-goes-beta-35b64a1217c0" target="_blank" rel="external nofollow noopener noreferrer">Web support for Flutter goes beta</a></p>
+
+            
+
+
+        </div>
+    </div>
+    <div id="post-footer" class="post-footer main-content-wrap">
+        
+            <div class="post-footer-tags">
+                <span class="text-color-light text-small">태그</span><br>
+                
+    <a class="tag tag--primary tag--small t-link" href="/tags/Flutter/" rel="tag">Flutter</a> <a class="tag tag--primary tag--small t-link" href="/tags/dart/" rel="tag">dart</a> <a class="tag tag--primary tag--small t-link" href="/tags/web/" rel="tag">web</a>
+
+            </div>
+        
+
+        <!-- 커스터마이징 해본 관련 글 영역-->
+        
+        
+        <div class="post-footer-tags">
+            <span class="text-color-light text-small">관련 글</span><br>
+            <ul class="popular-posts"><li class="popular-posts-item"><div class="popular-posts-title"><h3><a href="/2020/02/26/Flutter 웹 개발 후기 copy/" title="Flutter 웹 개발 후기" rel="bookmark">Flutter 웹 개발 후기</a></h3></div></li></ul>
+        </div>
+        
+        <!-- 끝 -->
+        
+        
+            <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a class="post-action-btn btn btn--default tooltip--top" href="/2020/02/26/Flutter%20%EC%9B%B9%20%EA%B0%9C%EB%B0%9C%20%ED%9B%84%EA%B8%B0%20copy/" data-tooltip="Flutter 웹 개발 후기" aria-label="이전: Flutter 웹 개발 후기">
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">이전</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a class="post-action-btn btn btn--default tooltip--top" href="/2020/01/30/SSL%20%20Labs%20High%20Score/" data-tooltip="Apache2 웹서버 SSL Labs 고득점 노리기" aria-label="다음: Apache2 웹서버 SSL Labs 고득점 노리기">
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">다음</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a class="post-action-btn btn btn--default btn-open-shareoptions" href="#btn-open-shareoptions" aria-label="이 포스트 공유하기">
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://www.facebook.com/sharer/sharer.php?u=https://zerogyun.dev/2020/02/07/Flutter%EC%97%90%EC%84%9C%20web%EC%9D%84%20%EC%B6%94%EA%B5%AC%ED%95%98%EB%A9%B4%20%EC%95%88%EB%90%98%EB%8A%94%EA%B1%B8%EA%B9%8C/" title="Facebook에 공유하기" aria-label="Facebook에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://twitter.com/intent/tweet?text=https://zerogyun.dev/2020/02/07/Flutter%EC%97%90%EC%84%9C%20web%EC%9D%84%20%EC%B6%94%EA%B5%AC%ED%95%98%EB%A9%B4%20%EC%95%88%EB%90%98%EB%8A%94%EA%B1%B8%EA%B9%8C/" title="Twitter에 공유하기" aria-label="Twitter에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://plus.google.com/share?url=https://zerogyun.dev/2020/02/07/Flutter%EC%97%90%EC%84%9C%20web%EC%9D%84%20%EC%B6%94%EA%B5%AC%ED%95%98%EB%A9%B4%20%EC%95%88%EB%90%98%EB%8A%94%EA%B1%B8%EA%B9%8C/" title="Google+에 공유하기" aria-label="Google+에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+                <li class="post-action">
+                    <a class="post-action-btn btn btn--default" href="#disqus_thread" aria-label="댓글을 남겨주세요">
+                        <i class="fa fa-comment"></i>
+                    </a>
+                </li>
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="맨 위로">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+        
+        
+            
+                <div id="disqus_thread">
+    <noscript>Please enable JavaScript to view the <a href="//disqus.com/?ref_noscript" target="_blank" rel="noopener">comments powered by Disqus.</a></noscript>
+</div>
+            
+        
+    </div>
+</article>
+
+
+
+                <footer id="footer" class="main-content-wrap">
+    <span class="copyrights">
+        Copyrights &copy; 2020 zerogyun. All Rights Reserved.
+    </span>
+</footer>
+
+            </div>
+            
+                <div id="bottom-bar" class="post-bottom-bar" data-behavior="5">
+                    <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a class="post-action-btn btn btn--default tooltip--top" href="/2020/02/26/Flutter%20%EC%9B%B9%20%EA%B0%9C%EB%B0%9C%20%ED%9B%84%EA%B8%B0%20copy/" data-tooltip="Flutter 웹 개발 후기" aria-label="이전: Flutter 웹 개발 후기">
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">이전</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a class="post-action-btn btn btn--default tooltip--top" href="/2020/01/30/SSL%20%20Labs%20High%20Score/" data-tooltip="Apache2 웹서버 SSL Labs 고득점 노리기" aria-label="다음: Apache2 웹서버 SSL Labs 고득점 노리기">
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">다음</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a class="post-action-btn btn btn--default btn-open-shareoptions" href="#btn-open-shareoptions" aria-label="이 포스트 공유하기">
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://www.facebook.com/sharer/sharer.php?u=https://zerogyun.dev/2020/02/07/Flutter%EC%97%90%EC%84%9C%20web%EC%9D%84%20%EC%B6%94%EA%B5%AC%ED%95%98%EB%A9%B4%20%EC%95%88%EB%90%98%EB%8A%94%EA%B1%B8%EA%B9%8C/" title="Facebook에 공유하기" aria-label="Facebook에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://twitter.com/intent/tweet?text=https://zerogyun.dev/2020/02/07/Flutter%EC%97%90%EC%84%9C%20web%EC%9D%84%20%EC%B6%94%EA%B5%AC%ED%95%98%EB%A9%B4%20%EC%95%88%EB%90%98%EB%8A%94%EA%B1%B8%EA%B9%8C/" title="Twitter에 공유하기" aria-label="Twitter에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://plus.google.com/share?url=https://zerogyun.dev/2020/02/07/Flutter%EC%97%90%EC%84%9C%20web%EC%9D%84%20%EC%B6%94%EA%B5%AC%ED%95%98%EB%A9%B4%20%EC%95%88%EB%90%98%EB%8A%94%EA%B1%B8%EA%B9%8C/" title="Google+에 공유하기" aria-label="Google+에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+                <li class="post-action">
+                    <a class="post-action-btn btn btn--default" href="#disqus_thread" aria-label="댓글을 남겨주세요">
+                        <i class="fa fa-comment"></i>
+                    </a>
+                </li>
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="맨 위로">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+                </div>
+                
+    <div id="share-options-bar" class="share-options-bar" data-behavior="5">
+        <i id="btn-close-shareoptions" class="fa fa-times"></i>
+        <ul class="share-options">
+            
+                
+                
+                <li class="share-option">
+                    <a class="share-option-btn" target="_blank" href="https://www.facebook.com/sharer/sharer.php?u=https://zerogyun.dev/2020/02/07/Flutter%EC%97%90%EC%84%9C%20web%EC%9D%84%20%EC%B6%94%EA%B5%AC%ED%95%98%EB%A9%B4%20%EC%95%88%EB%90%98%EB%8A%94%EA%B1%B8%EA%B9%8C/" aria-label="Facebook에 공유하기" rel="external nofollow noopener noreferrer">
+                        <i class="fab fa-facebook" aria-hidden="true"></i><span>Facebook에 공유하기</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a class="share-option-btn" target="_blank" href="https://twitter.com/intent/tweet?text=https://zerogyun.dev/2020/02/07/Flutter%EC%97%90%EC%84%9C%20web%EC%9D%84%20%EC%B6%94%EA%B5%AC%ED%95%98%EB%A9%B4%20%EC%95%88%EB%90%98%EB%8A%94%EA%B1%B8%EA%B9%8C/" aria-label="Twitter에 공유하기" rel="external nofollow noopener noreferrer">
+                        <i class="fab fa-twitter" aria-hidden="true"></i><span>Twitter에 공유하기</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a class="share-option-btn" target="_blank" href="https://plus.google.com/share?url=https://zerogyun.dev/2020/02/07/Flutter%EC%97%90%EC%84%9C%20web%EC%9D%84%20%EC%B6%94%EA%B5%AC%ED%95%98%EB%A9%B4%20%EC%95%88%EB%90%98%EB%8A%94%EA%B1%B8%EA%B9%8C/" aria-label="Google+에 공유하기" rel="external nofollow noopener noreferrer">
+                        <i class="fab fa-google-plus" aria-hidden="true"></i><span>Google+에 공유하기</span>
+                    </a>
+                </li>
+            
+        </ul>
+    </div>
+
+
+            
+        </div>
+        
+
+
+    
+        
+    
+
+<div id="about">
+    <div id="about-card">
+        <div id="about-btn-close">
+            <i class="fa fa-times"></i>
+        </div>
+        
+            <img id="about-card-picture" src="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4" alt="저자 이미지">
+        
+            <h4 id="about-card-name">zerogyun</h4>
+        
+            <div id="about-card-bio"><p>문과생은 코딩을 추구하면 안되는걸까🎉🎉😎</p>
+</div>
+        
+        
+            <div id="about-card-job">
+                <i class="fa fa-briefcase"></i>
+                <br>
+                <p>Student</p>
+
+            </div>
+        
+        
+            <div id="about-card-location">
+                <i class="fa fa-map-marker-alt"></i>
+                <br>
+                Seoul, South Korea
+            </div>
+        
+    </div>
+</div>
+
+        
+        
+<div id="cover" style="background-image:url('https://user-images.githubusercontent.com/29659112/76057866-1e009100-5fbe-11ea-84fe-00462e469e66.png');"></div>
+        <!--SCRIPTS-->
+
+<script src="/assets/js/script-0b9br5vpq85plmwdvtw8yqgpyj40cgb2lzib27pnr2wpe2cbodzjvxx71b2q.min.js"></script>
+
+<!--SCRIPTS END-->
+
+
+    
+        <script>
+          var disqus_config = function() {
+            this.page.url = 'https://zerogyun.dev/2020/02/07/Flutter%EC%97%90%EC%84%9C%20web%EC%9D%84%20%EC%B6%94%EA%B5%AC%ED%95%98%EB%A9%B4%20%EC%95%88%EB%90%98%EB%8A%94%EA%B1%B8%EA%B9%8C/';
+              
+            this.page.identifier = '2020/02/07/Flutter에서 web을 추구하면 안되는걸까/';
+              
+          };
+          (function() {
+            var d = document, s = d.createElement('script');
+            var disqus_shortname = 'cxz7720-github-io-1';
+            s.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+
+            s.setAttribute('data-timestamp', +new Date());
+            (d.head || d.body).appendChild(s);
+          })();
+        </script>
+    
+
+
+
+
+    </body>
+</html>

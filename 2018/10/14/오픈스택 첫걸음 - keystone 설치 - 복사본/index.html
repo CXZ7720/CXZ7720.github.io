@@ -1,0 +1,555 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+    
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="generator" content="사다리타기">
+    <title>오픈스택 첫걸음 - keystone 설치(1) - 사다리타기</title>
+    <meta name="author" content="zerogyun">
+    <link rel="canonical" href="https://zerogyun.dev/2018/10/14/오픈스택 첫걸음 - keystone 설치 - 복사본/">
+    
+    
+    
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"zerogyun","sameAs":["https://github.com/cxz7720","mailto:admin@zerogyun.dev"],"image":"https://avatars1.githubusercontent.com/u/29659112?s=460&v=4"},"articleBody":"\n1) Keystone DB 설정지난 포스팅에서 설치한 MariaDB 에 Keystone이 사용할 데이터베이스를 만들어줍니다. \n루트 권한에서 아래 명령어를 입력하세요. 먼저 mysql -u root -p 명령어로 root 계정으로 DB에 접속한 다음 creat database keystone; 을 통해 keystone DB를 만들어줍니다.\ngrant all privileges on keystone.* to keystone@&#39;localhost&#39; identified by &#39;password&#39;;와 grant all privileges on keystone.* to keystone@&#39;%&#39; identified by &#39;password&#39;; 명령으로 테이블에 권한을 할당해 줍니다.\nflush privileges 로 정책을 적용해준 뒤 exit를 통해 MariaDB 콘솔에서 빠져나옵니다.  \n2) keystone 설치  저는 Ubuntu 18.04.1 기반으로 설치했습니다.\n  먼저 최신버전인 Rocky를 설치하기 위하여 레포지토리를 apt 소스에 등록해야 합니다.\n  Ubuntu 18.04 LTS with Openstack Rocky  1234apt install software-properties-common add-apt-repository cloud-archive:rockysudo apt update &amp;&amp; apt dist-upgrade그 다음 keystone과 구성 프로그램을 설치해 줍니다.\n1apt -y install keystone python-openstackclient apache2 libapache2-mod-wsgi python-oauth2client\n\n\n3) keystone.conf 수정vim /etc/keystone/keystone.conf 로 keystone.conf를 수정합니다.줄 번호는 상황에 따라 다를 수 있습니다.\n1. 610번째 줄 :   memcache_servers 주소를 localhost:11211 로 바꿔줍니다.미리 할당된 머신의 IP를 알고 있다면 그 주소값을 넣어줍니다.\n2. 725번째 줄 :  database 항목의 connection 정보를 다음과 같이 바꿔줍니다.  connection = mysql+pymysql://keystone:password@10.0.0.30/keystone  이때 password 글자에는 MariaDB 설정단계에서 입력했던 비밀번호를 넣습니다.\n3. 2823번째 줄provider 라인의 주석을 해제하세요.\n수정하던 vim을 모두 저장한 뒤 빠져나와 DB_Sync 작업을 수행합니다. 이 명령은 아무련 결과값을 출력하지 않습니다.su -s /bin/bash keystone -c &quot;keystone-manage db_sync\n4) Fernet Key 초기화12keystone-manage fernet_setup --keystone-user keystone --keystone-group keystonekeystone-manage credential_setup --keystone-user keystone --keystone-group keystone\n을 통해 fernet 설정을 초기화해줍니다.\n5) Keystone Bootstrap설정에 앞서 controller 환경변수에 현재 머신의 IP를 넣어줍니다. 192.168.X.X 형식의 내부 내트워크에서 할당된 IP 또는 저 처럼 localhost 로 입력해도 됩니다.\necho $controller 를 통해 입력된 변수를 확인할 수 있습니다.\n12345keystone-manage bootstrap --bootstrap-password adminpassword \\--bootstrap-admin-url http:&#x2F;&#x2F;$controller:5000&#x2F;v3&#x2F; \\--bootstrap-internal-url http:&#x2F;&#x2F;$controller:5000&#x2F;v3&#x2F; \\--bootstrap-public-url http:&#x2F;&#x2F;$controller:5000&#x2F;v3&#x2F; \\--bootstrap-region-id RegionOne\n을 입력해주세요.\\ 은 명령어가 길어져서 생긴 개행문자입니다. 실제로 입력할 땐 \\ 없이 한번에 이어서 적으셔야 합니다.adminpassword 에는 원하는 비밀번호로 바꿔 넣으세요.\n5) 아파치 서버 설정편집기로 아파치 서버 설정파일을 열어줍니다.vim /etc/apache2/apache2.conf\n70번째 줄에 빈 공간에 원하는 서버 명을 적어주세요. 저는 Openstack-Study 라고했습니다.\n저장 후 에디터에서 빠져나옵니다.\nsystemctl restart apache2 명령어로 아파치 서비스를 재시작 해 줍니다.\n6) 환경변수 설정 스크립트 제작오픈스택 구동에 필요한 환경변수들을 자동으로 실행시켜주는 스크립트를 제작합니다.\n찾기 쉬운 위치에 keystonerc 라는 이름으로 새 파일을 생성합니다. 여기서는 루트 계정의 홈 디렉토리에 생성하겠습니다.vim ~/keystonerc\n에디터가 열리면 아래 내용을 입력후 저장해주세요. 이때도 마찬가지로 adminpassword는 원하는 비밀번호로 바꿔서 입력하면 됩니다.\n123456789export OS_PROJECT_DOMAIN_NAME&#x3D;defaultexport OS_USER_DOMAIN_NAME&#x3D;defaultexport OS_PROJECT_NAME&#x3D;adminexport OS_USERNAME&#x3D;adminexport OS_PASSWORD&#x3D;adminpasswordexport OS_AUTH_URL&#x3D;http:&#x2F;&#x2F;10.0.0.30:5000&#x2F;v3export OS_IDENTITY_API_VERSION&#x3D;3export OS_IMAGE_API_VERSION&#x3D;2export PS1&#x3D;&#39;\\u@\\h \\W(keystone)\\$ &#39;\n\n저장 후 keystonerc에 600 권한을 지정해 줍니다.chmod 600 ~/keystonerc\nsource ~/keystonerc 로 환경변수 파일을 불러와 적용합니다.명령줄의 모습이 바뀐걸 확인하실 수 있습니다.\n그 상태에서 다음 명령어로 터미널 프로파일에 추가해줍니다.echo &quot;soruce ~/keystonerc &quot; &gt;&gt; ~/.bash_profile\n이 이후에 사용하는 openstack 명령어는 soruce 명령어를 이용해 환경변수를 꼭 불러온 뒤 작업해야 합니다. 머신을 종료한 뒤 다시 작업을 이어서 할 때 등의 경우에 반드시 해당 파일을 다시 불러와야 정상적으로 명령어가 실행됩니다.\n7) 서비스 프로젝트 추가본격적으로 openstack 명령어를 이용하여 서비스 프로젝트를 추가합니다.openstack project create --domain default --description &quot;Service Project&quot; service","dateCreated":"2018-10-14T23:50:21+09:00","dateModified":"2020-07-26T04:26:32+09:00","datePublished":"2018-10-14T23:50:21+09:00","description":"오픈스택 두번째 글 입니다.이번엔 오픈스택의 모듈 중 keystone 을 설치합니다.Keystone은 다른 OpenStack 서비스에 대한 인증과 권한을 관리하는 역할을 합니다. ","headline":"오픈스택 첫걸음 - keystone 설치(1)","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"https://zerogyun.dev/2018/10/14/%EC%98%A4%ED%94%88%EC%8A%A4%ED%83%9D%20%EC%B2%AB%EA%B1%B8%EC%9D%8C%20-%20keystone%20%EC%84%A4%EC%B9%98%20-%20%EB%B3%B5%EC%82%AC%EB%B3%B8/"},"publisher":{"@type":"Organization","name":"zerogyun","sameAs":["https://github.com/cxz7720","mailto:admin@zerogyun.dev"],"image":"https://avatars1.githubusercontent.com/u/29659112?s=460&v=4","logo":{"@type":"ImageObject","url":"https://avatars1.githubusercontent.com/u/29659112?s=460&v=4"}},"url":"https://zerogyun.dev/2018/10/14/%EC%98%A4%ED%94%88%EC%8A%A4%ED%83%9D%20%EC%B2%AB%EA%B1%B8%EC%9D%8C%20-%20keystone%20%EC%84%A4%EC%B9%98%20-%20%EB%B3%B5%EC%82%AC%EB%B3%B8/","keywords":"openstack, rocky, cloud, keystone"}</script>
+    <meta name="description" content="오픈스택 두번째 글 입니다.이번엔 오픈스택의 모듈 중 keystone 을 설치합니다.Keystone은 다른 OpenStack 서비스에 대한 인증과 권한을 관리하는 역할을 합니다.">
+<meta property="og:type" content="blog">
+<meta property="og:title" content="오픈스택 첫걸음 - keystone 설치(1)">
+<meta property="og:url" content="https://zerogyun.dev/2018/10/14/%EC%98%A4%ED%94%88%EC%8A%A4%ED%83%9D%20%EC%B2%AB%EA%B1%B8%EC%9D%8C%20-%20keystone%20%EC%84%A4%EC%B9%98%20-%20%EB%B3%B5%EC%82%AC%EB%B3%B8/index.html">
+<meta property="og:site_name" content="사다리타기">
+<meta property="og:description" content="오픈스택 두번째 글 입니다.이번엔 오픈스택의 모듈 중 keystone 을 설치합니다.Keystone은 다른 OpenStack 서비스에 대한 인증과 권한을 관리하는 역할을 합니다.">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:image" content="https://zerogyun.dev/assets/openstack/keystone_db.PNG">
+<meta property="og:image" content="https://zerogyun.dev/assets/openstack/keystone_conf1.PNG">
+<meta property="og:image" content="https://zerogyun.dev/assets/openstack/keystone_conf2.PNG">
+<meta property="og:image" content="https://zerogyun.dev/assets/openstack/keystone_conf3.PNG">
+<meta property="og:image" content="https://zerogyun.dev/assets/openstack/apache_config.PNG">
+<meta property="article:published_time" content="2018-10-14T14:50:21.000Z">
+<meta property="article:modified_time" content="2020-07-25T19:26:32.841Z">
+<meta property="article:author" content="zerogyun">
+<meta property="article:tag" content="openstack">
+<meta property="article:tag" content="rocky">
+<meta property="article:tag" content="cloud">
+<meta property="article:tag" content="keystone">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://zerogyun.dev/assets/openstack/keystone_db.PNG">
+    
+    
+        
+    
+    
+        <meta property="og:image" content="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4">
+    
+    
+    
+    
+    <!--STYLES-->
+    
+<link rel="stylesheet" href="/assets/css/style-gfvy1paadnhrenematj51np8g8cfvu4k1avie6z7jqeilszkarsav8zxtmuu.min.css">
+
+    <!--STYLES END-->
+    
+    <script async src="https://www.googletagmanager.com/gtag/js?id=UA-126694602-3"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+
+        gtag('config', 'UA-126694602-3');
+    </script>
+
+
+    
+
+    
+        
+    
+</head>
+
+    <body>
+        <div id="blog">
+            <!-- Define author's picture -->
+
+
+    
+        
+            
+        
+    
+
+<header id="header" data-behavior="5">
+    <i id="btn-open-sidebar" class="fa fa-lg fa-bars"></i>
+    <div class="header-title">
+        <a class="header-title-link" href="/" aria-label>
+            사다리타기
+        </a>
+    </div>
+    
+        
+            <a class="header-right-picture " href="#about" aria-label="링크 열기: /#about">
+        
+        
+            <img class="header-picture" src="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4" alt="저자 이미지">
+        
+        </a>
+    
+</header>
+
+            <!-- Define author's picture -->
+
+
+
+        
+    
+
+<nav id="sidebar" data-behavior="5">
+    <div class="sidebar-container">
+        
+            <div class="sidebar-profile">
+                <a href="/#about" aria-label="저자에 대해 더 알아보기">
+                    <img class="sidebar-profile-picture" src="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4" alt="저자 이미지">
+                </a>
+                <h4 class="sidebar-profile-name">zerogyun</h4>
+                
+                    <h5 class="sidebar-profile-bio"><p>문과생은 코딩을 추구하면 안되는걸까🎉🎉😎</p>
+</h5>
+                
+            </div>
+        
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="/" rel="noopener" title="Home">
+                        <i class="sidebar-button-icon fa fa-home" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Home</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="/all-categories" rel="noopener" title="카테고리">
+                        <i class="sidebar-button-icon fa fa-bookmark" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">카테고리</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="/all-tags" rel="noopener" title="태그">
+                        <i class="sidebar-button-icon fa fa-tags" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">태그</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="https://zerogyun.dev/profile" rel="noopener" title="About">
+                        <i class="sidebar-button-icon fa fa-question" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">About</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="https://github.com/cxz7720" target="_blank" rel="external nofollow noopener noreferrer" title="GitHub">
+                        <i class="sidebar-button-icon fab fa-github" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">GitHub</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="mailto:admin@zerogyun.dev" target="_blank" rel="noopener" title="Mail">
+                        <i class="sidebar-button-icon fa fa-envelope" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Mail</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+    </div>
+</nav>
+
+            
+            <div id="main" data-behavior="5" class="
+                        hasCoverMetaIn
+                        ">
+                
+<article class="post">
+    
+    
+        <div class="post-header main-content-wrap text-left">
+    
+        <h1 class="post-title">
+            오픈스택 첫걸음 - keystone 설치(1)
+        </h1>
+    
+    
+        <div class="post-meta">
+    <time datetime="2018-10-14T23:50:21+09:00">
+	
+		    2018/10/14
+    	
+    </time>
+    
+        <span>카테고리 </span>
+        
+    <a class="category-link" href="/categories/openstack/">openstack</a>
+
+
+    
+</div>
+
+    
+</div>
+
+    
+    <div class="post-content markdown">
+        <div class="main-content-wrap">
+            <!-- excerpt -->
+<h3 id="1-Keystone-DB-설정"><a href="#1-Keystone-DB-설정" class="headerlink" title="1) Keystone DB 설정"></a>1) Keystone DB 설정</h3><p>지난 포스팅에서 설치한 MariaDB 에 Keystone이 사용할 데이터베이스를 만들어줍니다. </p>
+<p>루트 권한에서 아래 명령어를 입력하세요.<br> 먼저 <code>mysql -u root -p</code> 명령어로 root 계정으로 DB에 접속한 다음 <code>creat database keystone;</code> 을 통해 <code>keystone</code> DB를 만들어줍니다.</p>
+<p><code>grant all privileges on keystone.* to keystone@&#39;localhost&#39; identified by &#39;password&#39;;</code>와 <code>grant all privileges on keystone.* to keystone@&#39;%&#39; identified by &#39;password&#39;;</code> 명령으로 테이블에 권한을 할당해 줍니다.</p>
+<p><code>flush privileges</code> 로 정책을 적용해준 뒤 <code>exit</code>를 통해 MariaDB 콘솔에서 빠져나옵니다.<br>  <img src="/assets/openstack/keystone_db.PNG" alt="DB만들기"></p>
+<h3 id="2-keystone-설치"><a href="#2-keystone-설치" class="headerlink" title="2) keystone 설치"></a>2) keystone 설치</h3><p>  저는 Ubuntu 18.04.1 기반으로 설치했습니다.</p>
+<p>  먼저 최신버전인 Rocky를 설치하기 위하여 레포지토리를 apt 소스에 등록해야 합니다.</p>
+<p>  <strong>Ubuntu 18.04 LTS with Openstack Rocky</strong><br>  <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">apt install software-properties-common </span><br><span class="line">add-apt-repository cloud-archive:rocky</span><br><span class="line"></span><br><span class="line">sudo apt update &amp;&amp; apt dist-upgrade</span><br></pre></td></tr></table></figure><br>그 다음 keystone과 구성 프로그램을 설치해 줍니다.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">apt -y install keystone python-openstackclient apache2 libapache2-mod-wsgi python-oauth2client</span><br></pre></td></tr></table></figure>
+
+
+<h3 id="3-keystone-conf-수정"><a href="#3-keystone-conf-수정" class="headerlink" title="3) keystone.conf 수정"></a>3) keystone.conf 수정</h3><p><code>vim /etc/keystone/keystone.conf</code> 로 keystone.conf를 수정합니다.<br>줄 번호는 상황에 따라 다를 수 있습니다.</p>
+<p><strong>1. 610번째 줄 :</strong><br>   memcache_servers 주소를 <code>localhost:11211</code> 로 바꿔줍니다.<br>미리 할당된 머신의 IP를 알고 있다면 그 주소값을 넣어줍니다.<br><img src="/assets/openstack/keystone_conf1.PNG" alt="keystone_conf1"></p>
+<p><strong>2. 725번째 줄 :</strong><br>  database 항목의 connection 정보를 다음과 같이 바꿔줍니다.<br>  <code>connection = mysql+pymysql://keystone:password@10.0.0.30/keystone</code><br>  이때 <code>password</code> 글자에는 MariaDB 설정단계에서 입력했던 비밀번호를 넣습니다.<br><img src="/assets/openstack/keystone_conf2.PNG" alt="keystone_conf2"></p>
+<p><strong>3. 2823번째 줄</strong><br>provider 라인의 주석을 해제하세요.<br><img src="/assets/openstack/keystone_conf3.PNG" alt="keystone_conf3"></p>
+<p>수정하던 vim을 모두 저장한 뒤 빠져나와 DB_Sync 작업을 수행합니다. 이 명령은 아무련 결과값을 출력하지 않습니다.<br><code>su -s /bin/bash keystone -c &quot;keystone-manage db_sync</code></p>
+<h3 id="4-Fernet-Key-초기화"><a href="#4-Fernet-Key-초기화" class="headerlink" title="4) Fernet Key 초기화"></a>4) Fernet Key 초기화</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">keystone-manage fernet_setup --keystone-user keystone --keystone-group keystone</span><br><span class="line">keystone-manage credential_setup --keystone-user keystone --keystone-group keystone</span><br></pre></td></tr></table></figure>
+<p>을 통해 fernet 설정을 초기화해줍니다.</p>
+<h3 id="5-Keystone-Bootstrap"><a href="#5-Keystone-Bootstrap" class="headerlink" title="5) Keystone Bootstrap"></a>5) Keystone Bootstrap</h3><p>설정에 앞서 controller 환경변수에 현재 머신의 IP를 넣어줍니다. 192.168.X.X 형식의 내부 내트워크에서 할당된 IP 또는 저 처럼 localhost 로 입력해도 됩니다.</p>
+<p><code>echo $controller</code> 를 통해 입력된 변수를 확인할 수 있습니다.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">keystone-manage bootstrap --bootstrap-password adminpassword \</span><br><span class="line">--bootstrap-admin-url http:&#x2F;&#x2F;$controller:5000&#x2F;v3&#x2F; \</span><br><span class="line">--bootstrap-internal-url http:&#x2F;&#x2F;$controller:5000&#x2F;v3&#x2F; \</span><br><span class="line">--bootstrap-public-url http:&#x2F;&#x2F;$controller:5000&#x2F;v3&#x2F; \</span><br><span class="line">--bootstrap-region-id RegionOne</span><br></pre></td></tr></table></figure>
+<p>을 입력해주세요.<br><code>\</code> 은 명령어가 길어져서 생긴 개행문자입니다. 실제로 입력할 땐 <code>\</code> 없이 한번에 이어서 적으셔야 합니다.<br><code>adminpassword</code> 에는 원하는 비밀번호로 바꿔 넣으세요.</p>
+<h3 id="5-아파치-서버-설정"><a href="#5-아파치-서버-설정" class="headerlink" title="5) 아파치 서버 설정"></a>5) 아파치 서버 설정</h3><p>편집기로 아파치 서버 설정파일을 열어줍니다.<br><code>vim /etc/apache2/apache2.conf</code></p>
+<p>70번째 줄에 빈 공간에 원하는 서버 명을 적어주세요. 저는 Openstack-Study 라고했습니다.<br><img src="/assets/openstack/apache_config.PNG" alt="apache_config"></p>
+<p>저장 후 에디터에서 빠져나옵니다.</p>
+<p><code>systemctl restart apache2</code> 명령어로 아파치 서비스를 재시작 해 줍니다.</p>
+<h3 id="6-환경변수-설정-스크립트-제작"><a href="#6-환경변수-설정-스크립트-제작" class="headerlink" title="6) 환경변수 설정 스크립트 제작"></a>6) 환경변수 설정 스크립트 제작</h3><p>오픈스택 구동에 필요한 환경변수들을 자동으로 실행시켜주는 스크립트를 제작합니다.</p>
+<p>찾기 쉬운 위치에 keystonerc 라는 이름으로 새 파일을 생성합니다. 여기서는 루트 계정의 홈 디렉토리에 생성하겠습니다.<br><code>vim ~/keystonerc</code></p>
+<p>에디터가 열리면 아래 내용을 입력후 저장해주세요. 이때도 마찬가지로 <code>adminpassword</code>는 원하는 비밀번호로 바꿔서 입력하면 됩니다.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">export OS_PROJECT_DOMAIN_NAME&#x3D;default</span><br><span class="line">export OS_USER_DOMAIN_NAME&#x3D;default</span><br><span class="line">export OS_PROJECT_NAME&#x3D;admin</span><br><span class="line">export OS_USERNAME&#x3D;admin</span><br><span class="line">export OS_PASSWORD&#x3D;adminpassword</span><br><span class="line">export OS_AUTH_URL&#x3D;http:&#x2F;&#x2F;10.0.0.30:5000&#x2F;v3</span><br><span class="line">export OS_IDENTITY_API_VERSION&#x3D;3</span><br><span class="line">export OS_IMAGE_API_VERSION&#x3D;2</span><br><span class="line">export PS1&#x3D;&#39;\u@\h \W(keystone)\$ &#39;</span><br></pre></td></tr></table></figure>
+
+<p>저장 후 keystonerc에 600 권한을 지정해 줍니다.<br><code>chmod 600 ~/keystonerc</code></p>
+<p><code>source ~/keystonerc</code> 로 환경변수 파일을 불러와 적용합니다.<br>명령줄의 모습이 바뀐걸 확인하실 수 있습니다.</p>
+<p>그 상태에서 다음 명령어로 터미널 프로파일에 추가해줍니다.<br><code>echo &quot;soruce ~/keystonerc &quot; &gt;&gt; ~/.bash_profile</code></p>
+<p><strong>이 이후에 사용하는 openstack 명령어는 <code>soruce</code> 명령어를 이용해 환경변수를 꼭 불러온 뒤 작업해야 합니다. 머신을 종료한 뒤 다시 작업을 이어서 할 때 등의 경우에 반드시 해당 파일을 다시 불러와야 정상적으로 명령어가 실행됩니다.</strong></p>
+<h3 id="7-서비스-프로젝트-추가"><a href="#7-서비스-프로젝트-추가" class="headerlink" title="7) 서비스 프로젝트 추가"></a>7) 서비스 프로젝트 추가</h3><p>본격적으로 openstack 명령어를 이용하여 서비스 프로젝트를 추가합니다.<br><code>openstack project create --domain default --description &quot;Service Project&quot; service</code></p>
+            
+
+
+        </div>
+    </div>
+    <div id="post-footer" class="post-footer main-content-wrap">
+        
+            <div class="post-footer-tags">
+                <span class="text-color-light text-small">태그</span><br>
+                
+    <a class="tag tag--primary tag--small t-link" href="/tags/cloud/" rel="tag">cloud</a> <a class="tag tag--primary tag--small t-link" href="/tags/keystone/" rel="tag">keystone</a> <a class="tag tag--primary tag--small t-link" href="/tags/openstack/" rel="tag">openstack</a> <a class="tag tag--primary tag--small t-link" href="/tags/rocky/" rel="tag">rocky</a>
+
+            </div>
+        
+
+        <!-- 커스터마이징 해본 관련 글 영역-->
+        
+        
+        <div class="post-footer-tags">
+            <span class="text-color-light text-small">관련 글</span><br>
+            <ul class="popular-posts"><li class="popular-posts-item"><div class="popular-posts-title"><h3><a href="/2018/09/30/오픈스택 첫걸음 - 환경구축/" title="오픈스택 첫걸음 - 환경구축" rel="bookmark">오픈스택 첫걸음 - 환경구축</a></h3></div></li></ul>
+        </div>
+        
+        <!-- 끝 -->
+        
+        
+            <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a class="post-action-btn btn btn--default tooltip--top" href="/2019/05/07/%EC%9B%A8%EC%9D%BC%20%EC%9D%B5%EC%8A%A4%ED%85%90%EC%85%98%20VIBE%20%EA%B0%9C%EB%B0%9C%EA%B8%B0/" data-tooltip="Whale 브라우져 익스텐션 - VIBE 개발기" aria-label="이전: Whale 브라우져 익스텐션 - VIBE 개발기">
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">이전</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a class="post-action-btn btn btn--default tooltip--top" href="/2018/09/30/%EC%98%A4%ED%94%88%EC%8A%A4%ED%83%9D%20%EC%B2%AB%EA%B1%B8%EC%9D%8C%20-%20%ED%99%98%EA%B2%BD%EA%B5%AC%EC%B6%95/" data-tooltip="오픈스택 첫걸음 - 환경구축" aria-label="다음: 오픈스택 첫걸음 - 환경구축">
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">다음</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a class="post-action-btn btn btn--default btn-open-shareoptions" href="#btn-open-shareoptions" aria-label="이 포스트 공유하기">
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://www.facebook.com/sharer/sharer.php?u=https://zerogyun.dev/2018/10/14/%EC%98%A4%ED%94%88%EC%8A%A4%ED%83%9D%20%EC%B2%AB%EA%B1%B8%EC%9D%8C%20-%20keystone%20%EC%84%A4%EC%B9%98%20-%20%EB%B3%B5%EC%82%AC%EB%B3%B8/" title="Facebook에 공유하기" aria-label="Facebook에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://twitter.com/intent/tweet?text=https://zerogyun.dev/2018/10/14/%EC%98%A4%ED%94%88%EC%8A%A4%ED%83%9D%20%EC%B2%AB%EA%B1%B8%EC%9D%8C%20-%20keystone%20%EC%84%A4%EC%B9%98%20-%20%EB%B3%B5%EC%82%AC%EB%B3%B8/" title="Twitter에 공유하기" aria-label="Twitter에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://plus.google.com/share?url=https://zerogyun.dev/2018/10/14/%EC%98%A4%ED%94%88%EC%8A%A4%ED%83%9D%20%EC%B2%AB%EA%B1%B8%EC%9D%8C%20-%20keystone%20%EC%84%A4%EC%B9%98%20-%20%EB%B3%B5%EC%82%AC%EB%B3%B8/" title="Google+에 공유하기" aria-label="Google+에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+                <li class="post-action">
+                    <a class="post-action-btn btn btn--default" href="#disqus_thread" aria-label="댓글을 남겨주세요">
+                        <i class="fa fa-comment"></i>
+                    </a>
+                </li>
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="맨 위로">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+        
+        
+            
+                <div id="disqus_thread">
+    <noscript>Please enable JavaScript to view the <a href="//disqus.com/?ref_noscript" target="_blank" rel="noopener">comments powered by Disqus.</a></noscript>
+</div>
+            
+        
+    </div>
+</article>
+
+
+
+                <footer id="footer" class="main-content-wrap">
+    <span class="copyrights">
+        Copyrights &copy; 2020 zerogyun. All Rights Reserved.
+    </span>
+</footer>
+
+            </div>
+            
+                <div id="bottom-bar" class="post-bottom-bar" data-behavior="5">
+                    <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a class="post-action-btn btn btn--default tooltip--top" href="/2019/05/07/%EC%9B%A8%EC%9D%BC%20%EC%9D%B5%EC%8A%A4%ED%85%90%EC%85%98%20VIBE%20%EA%B0%9C%EB%B0%9C%EA%B8%B0/" data-tooltip="Whale 브라우져 익스텐션 - VIBE 개발기" aria-label="이전: Whale 브라우져 익스텐션 - VIBE 개발기">
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">이전</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a class="post-action-btn btn btn--default tooltip--top" href="/2018/09/30/%EC%98%A4%ED%94%88%EC%8A%A4%ED%83%9D%20%EC%B2%AB%EA%B1%B8%EC%9D%8C%20-%20%ED%99%98%EA%B2%BD%EA%B5%AC%EC%B6%95/" data-tooltip="오픈스택 첫걸음 - 환경구축" aria-label="다음: 오픈스택 첫걸음 - 환경구축">
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">다음</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a class="post-action-btn btn btn--default btn-open-shareoptions" href="#btn-open-shareoptions" aria-label="이 포스트 공유하기">
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://www.facebook.com/sharer/sharer.php?u=https://zerogyun.dev/2018/10/14/%EC%98%A4%ED%94%88%EC%8A%A4%ED%83%9D%20%EC%B2%AB%EA%B1%B8%EC%9D%8C%20-%20keystone%20%EC%84%A4%EC%B9%98%20-%20%EB%B3%B5%EC%82%AC%EB%B3%B8/" title="Facebook에 공유하기" aria-label="Facebook에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://twitter.com/intent/tweet?text=https://zerogyun.dev/2018/10/14/%EC%98%A4%ED%94%88%EC%8A%A4%ED%83%9D%20%EC%B2%AB%EA%B1%B8%EC%9D%8C%20-%20keystone%20%EC%84%A4%EC%B9%98%20-%20%EB%B3%B5%EC%82%AC%EB%B3%B8/" title="Twitter에 공유하기" aria-label="Twitter에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://plus.google.com/share?url=https://zerogyun.dev/2018/10/14/%EC%98%A4%ED%94%88%EC%8A%A4%ED%83%9D%20%EC%B2%AB%EA%B1%B8%EC%9D%8C%20-%20keystone%20%EC%84%A4%EC%B9%98%20-%20%EB%B3%B5%EC%82%AC%EB%B3%B8/" title="Google+에 공유하기" aria-label="Google+에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+                <li class="post-action">
+                    <a class="post-action-btn btn btn--default" href="#disqus_thread" aria-label="댓글을 남겨주세요">
+                        <i class="fa fa-comment"></i>
+                    </a>
+                </li>
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="맨 위로">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+                </div>
+                
+    <div id="share-options-bar" class="share-options-bar" data-behavior="5">
+        <i id="btn-close-shareoptions" class="fa fa-times"></i>
+        <ul class="share-options">
+            
+                
+                
+                <li class="share-option">
+                    <a class="share-option-btn" target="_blank" href="https://www.facebook.com/sharer/sharer.php?u=https://zerogyun.dev/2018/10/14/%EC%98%A4%ED%94%88%EC%8A%A4%ED%83%9D%20%EC%B2%AB%EA%B1%B8%EC%9D%8C%20-%20keystone%20%EC%84%A4%EC%B9%98%20-%20%EB%B3%B5%EC%82%AC%EB%B3%B8/" aria-label="Facebook에 공유하기" rel="external nofollow noopener noreferrer">
+                        <i class="fab fa-facebook" aria-hidden="true"></i><span>Facebook에 공유하기</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a class="share-option-btn" target="_blank" href="https://twitter.com/intent/tweet?text=https://zerogyun.dev/2018/10/14/%EC%98%A4%ED%94%88%EC%8A%A4%ED%83%9D%20%EC%B2%AB%EA%B1%B8%EC%9D%8C%20-%20keystone%20%EC%84%A4%EC%B9%98%20-%20%EB%B3%B5%EC%82%AC%EB%B3%B8/" aria-label="Twitter에 공유하기" rel="external nofollow noopener noreferrer">
+                        <i class="fab fa-twitter" aria-hidden="true"></i><span>Twitter에 공유하기</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a class="share-option-btn" target="_blank" href="https://plus.google.com/share?url=https://zerogyun.dev/2018/10/14/%EC%98%A4%ED%94%88%EC%8A%A4%ED%83%9D%20%EC%B2%AB%EA%B1%B8%EC%9D%8C%20-%20keystone%20%EC%84%A4%EC%B9%98%20-%20%EB%B3%B5%EC%82%AC%EB%B3%B8/" aria-label="Google+에 공유하기" rel="external nofollow noopener noreferrer">
+                        <i class="fab fa-google-plus" aria-hidden="true"></i><span>Google+에 공유하기</span>
+                    </a>
+                </li>
+            
+        </ul>
+    </div>
+
+
+            
+        </div>
+        
+
+
+    
+        
+    
+
+<div id="about">
+    <div id="about-card">
+        <div id="about-btn-close">
+            <i class="fa fa-times"></i>
+        </div>
+        
+            <img id="about-card-picture" src="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4" alt="저자 이미지">
+        
+            <h4 id="about-card-name">zerogyun</h4>
+        
+            <div id="about-card-bio"><p>문과생은 코딩을 추구하면 안되는걸까🎉🎉😎</p>
+</div>
+        
+        
+            <div id="about-card-job">
+                <i class="fa fa-briefcase"></i>
+                <br>
+                <p>Student</p>
+
+            </div>
+        
+        
+            <div id="about-card-location">
+                <i class="fa fa-map-marker-alt"></i>
+                <br>
+                Seoul, South Korea
+            </div>
+        
+    </div>
+</div>
+
+        
+        
+<div id="cover" style="background-image:url('https://user-images.githubusercontent.com/29659112/76057866-1e009100-5fbe-11ea-84fe-00462e469e66.png');"></div>
+        <!--SCRIPTS-->
+
+<script src="/assets/js/script-0b9br5vpq85plmwdvtw8yqgpyj40cgb2lzib27pnr2wpe2cbodzjvxx71b2q.min.js"></script>
+
+<!--SCRIPTS END-->
+
+
+    
+        <script>
+          var disqus_config = function() {
+            this.page.url = 'https://zerogyun.dev/2018/10/14/%EC%98%A4%ED%94%88%EC%8A%A4%ED%83%9D%20%EC%B2%AB%EA%B1%B8%EC%9D%8C%20-%20keystone%20%EC%84%A4%EC%B9%98%20-%20%EB%B3%B5%EC%82%AC%EB%B3%B8/';
+              
+            this.page.identifier = '2018/10/14/오픈스택 첫걸음 - keystone 설치 - 복사본/';
+              
+          };
+          (function() {
+            var d = document, s = d.createElement('script');
+            var disqus_shortname = 'cxz7720-github-io-1';
+            s.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+
+            s.setAttribute('data-timestamp', +new Date());
+            (d.head || d.body).appendChild(s);
+          })();
+        </script>
+    
+
+
+
+
+    </body>
+</html>

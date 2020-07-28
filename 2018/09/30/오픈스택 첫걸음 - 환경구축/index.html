@@ -1,0 +1,562 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+    
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="generator" content="사다리타기">
+    <title>오픈스택 첫걸음 - 환경구축 - 사다리타기</title>
+    <meta name="author" content="zerogyun">
+    <link rel="canonical" href="https://zerogyun.dev/2018/09/30/오픈스택 첫걸음 - 환경구축/">
+    
+    
+    
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"zerogyun","sameAs":["https://github.com/cxz7720","mailto:admin@zerogyun.dev"],"image":"https://avatars1.githubusercontent.com/u/29659112?s=460&v=4"},"articleBody":"\n막상 오픈스택을 공부해보겠다!! 라고 비장하게 마음먹고 환경구축부터 도전했지만 공식 홈페이지에 적혀있는 문서만으로는 역부족이었습니다.\n낯선 오류로 한참을 삽질하고, 새로 나온 Queens 버전과 Ubuntu 18.04 버전에서 성공한 사례는 찾기 힘들어서 여러 사이트 구글링해가며 얻은 정보들을 모아 포스팅 할 예정입니다.\n이 포스팅에서는 Openstack의 수많은 컴포넌트 중 Keostone, Nova, Glance, Horizon 까지만 진행합니다.\n시작은 오픈스택 Queens로 했지만, 스터디 진행은 SKTelecom OS-Lab의 TACO-Script를 통해 할 예정입니다. TACO-All in One Script 관련해서도 시간이 나는대로 업로드 예정입니다.\nOpenstack 설치하기1) 설치 환경윈도우의 VirtualBox에 우분투를 설치하여 진행하였습니다.\n1234Guest OS : Ubuntu 18.04.1 DesktopCPU : Ryzen R5 2600xHDD : 80GB 동적할당Network : 어댑터에 브릿지(공유기 DHCP에서 별도의 ip 할당)\n\n참고한 링크\n\nServer World - Openstack Rocky설치 당시에는 Queens 버전으로 진행했었는데 얼마 전 Rocky 버전이 릴리즈 되었네요. 지금은 Rocky 기준으로 문서가 갱신되었습니다. 포스팅도 Rocky 기준으로 진행될 예정입니다.\n\nOpenstack Docs공식 문서입니다. 설명이 다소 부족한감이 없잖아 있었습니다. 공식문서만 따라서 진행하다가 헤멘적이 꽤 많았던 기억이 있네요.\n\n\n2) Ubuntu 18.04 Desktop 설치  저는 Ubuntu 18.04.1 기반으로 설치했습니다.  Virtualbox에서 사용자의 환경에 맞게 설정값을 바꿔주신 뒤 Guest OS를 설치하시면 됩니다.\n  제가 변경한 부분은 CPU 개수, 네트워크 어댑터 정도 입니다.    \n  설치가 완료되면  sudo apt-get update -y &amp;&amp; sudo apt-get upgrade -y 를 이용해 패키지 목록을 최신화하는것도 잊지 마세요.\n3) Pre-requirements 설치  이제부터 모든 작업은 Root 권한에서 실행됩니다.  sudo su 를 이용해 Root 유저로 변경해주세요.\n\nMariaDB 설치 및 환경설정다음 명령어를 이용해 MariaDB를 설치합니다.apt -y install mariadb-server그 후 에디터를 이용해 환경설정 파일을 수정해줍니다./etc/mysql/mariadb.conf.d/50-server.cnf 파일을 열어주세요.\n아래 사진과 같이 111번째 줄의 utf8mb4를 utf8로,112번째 줄은 주석처리 해주세요.\n그 다음 systemctl restart mariadb 명령어로 MarinDB 서비스를 재시작합니다.\n\n\n재시작이 완료되면 Initial Setting을 할 차례 입니다.\n`mysql_secure_installation` 를 입력하면 단계별로 설정 마법사를 이용해 단계별로 적용할 수 있습니다.\n\n`Change the root password?` 에서 `Y`를 입력해 데이터베이스의 새 root 유저 패스워드를 입력하세요.\n\n그 뒤 나오는\n1234Remove anonymous users?Disallow root login remotely?Remove test database and access to it?Reload privilege tables now?\n에 모두 `Y`를 입력한 뒤 마법사를 빠져나오면 됩니다.\n오픈스택 Rocky 레포지토리 추가\n1234apt -y install software-properties-common add-apt-repository cloud-archive:rocky apt update apt -y upgrade\nRabbitMQ, Memcached 설치\n123apt -y install rabbitmq-server memcached python-pymysqlrabbitmqctl add_user openstack &#39;원하는_비밀번호_여기에_입력&#39;rabbitmqctl set_permissions openstack &quot;.*&quot; &quot;.*&quot; &quot;.*&quot;\n\n순서대로 입력 후 서비스를 재시작 해줍니다.systemctl restart rabbitmq-server\n에디터를 이용해 다시 Mariadb 설정파일을 열어 29번째 줄을 아래 이미지 같이 0.0.0.0으로 수정한 뒤 서비스를 재시작 해줍니다./etc/mysql/mariadb.conf.d/50-server.cnf\nsystemctl restart mariadb\n이번엔 memcached 설정파일을 수정합니다./etc/memcached.conf를 열어 35번째 줄을 아래 이미지와 같이 0.0.0.0으로 수정하고 서비스를 재시작 해줍니다.\nsystemctl restart memcached\n환경구축이 모두 끝났습니다.본격적인 Keystone설치는 다음 포스팅에 이어서 진행하도록 하겠습니다.\n\n","dateCreated":"2018-09-30T18:24:21+09:00","dateModified":"2020-07-26T04:26:32+09:00","datePublished":"2018-09-30T18:24:21+09:00","description":"오픈스택을 이용한 클라우드 컴퓨팅 스터디를 하면서 적을 포스팅 중 첫 번째 글입니다.","headline":"오픈스택 첫걸음 - 환경구축","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"https://zerogyun.dev/2018/09/30/%EC%98%A4%ED%94%88%EC%8A%A4%ED%83%9D%20%EC%B2%AB%EA%B1%B8%EC%9D%8C%20-%20%ED%99%98%EA%B2%BD%EA%B5%AC%EC%B6%95/"},"publisher":{"@type":"Organization","name":"zerogyun","sameAs":["https://github.com/cxz7720","mailto:admin@zerogyun.dev"],"image":"https://avatars1.githubusercontent.com/u/29659112?s=460&v=4","logo":{"@type":"ImageObject","url":"https://avatars1.githubusercontent.com/u/29659112?s=460&v=4"}},"url":"https://zerogyun.dev/2018/09/30/%EC%98%A4%ED%94%88%EC%8A%A4%ED%83%9D%20%EC%B2%AB%EA%B1%B8%EC%9D%8C%20-%20%ED%99%98%EA%B2%BD%EA%B5%AC%EC%B6%95/","keywords":"openstack, rocky, cloud"}</script>
+    <meta name="description" content="오픈스택을 이용한 클라우드 컴퓨팅 스터디를 하면서 적을 포스팅 중 첫 번째 글입니다.">
+<meta property="og:type" content="blog">
+<meta property="og:title" content="오픈스택 첫걸음 - 환경구축">
+<meta property="og:url" content="https://zerogyun.dev/2018/09/30/%EC%98%A4%ED%94%88%EC%8A%A4%ED%83%9D%20%EC%B2%AB%EA%B1%B8%EC%9D%8C%20-%20%ED%99%98%EA%B2%BD%EA%B5%AC%EC%B6%95/index.html">
+<meta property="og:site_name" content="사다리타기">
+<meta property="og:description" content="오픈스택을 이용한 클라우드 컴퓨팅 스터디를 하면서 적을 포스팅 중 첫 번째 글입니다.">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:image" content="https://zerogyun.dev/assets/openstack/machine_set2.PNG">
+<meta property="og:image" content="https://zerogyun.dev/assets/openstack/machine_set4.PNG">
+<meta property="og:image" content="https://zerogyun.dev/assets/openstack/mariadb_conf.PNG">
+<meta property="og:image" content="https://zerogyun.dev/assets/openstack/bind_address.PNG">
+<meta property="og:image" content="https://zerogyun.dev/assets/openstack/memcached_conf.PNG">
+<meta property="article:published_time" content="2018-09-30T09:24:21.000Z">
+<meta property="article:modified_time" content="2020-07-25T19:26:32.841Z">
+<meta property="article:author" content="zerogyun">
+<meta property="article:tag" content="openstack">
+<meta property="article:tag" content="rocky">
+<meta property="article:tag" content="cloud">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://zerogyun.dev/assets/openstack/machine_set2.PNG">
+    
+    
+        
+    
+    
+        <meta property="og:image" content="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4">
+    
+    
+    
+    
+    <!--STYLES-->
+    
+<link rel="stylesheet" href="/assets/css/style-gfvy1paadnhrenematj51np8g8cfvu4k1avie6z7jqeilszkarsav8zxtmuu.min.css">
+
+    <!--STYLES END-->
+    
+    <script async src="https://www.googletagmanager.com/gtag/js?id=UA-126694602-3"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+
+        gtag('config', 'UA-126694602-3');
+    </script>
+
+
+    
+
+    
+        
+    
+</head>
+
+    <body>
+        <div id="blog">
+            <!-- Define author's picture -->
+
+
+    
+        
+            
+        
+    
+
+<header id="header" data-behavior="5">
+    <i id="btn-open-sidebar" class="fa fa-lg fa-bars"></i>
+    <div class="header-title">
+        <a class="header-title-link" href="/" aria-label>
+            사다리타기
+        </a>
+    </div>
+    
+        
+            <a class="header-right-picture " href="#about" aria-label="링크 열기: /#about">
+        
+        
+            <img class="header-picture" src="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4" alt="저자 이미지">
+        
+        </a>
+    
+</header>
+
+            <!-- Define author's picture -->
+
+
+
+        
+    
+
+<nav id="sidebar" data-behavior="5">
+    <div class="sidebar-container">
+        
+            <div class="sidebar-profile">
+                <a href="/#about" aria-label="저자에 대해 더 알아보기">
+                    <img class="sidebar-profile-picture" src="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4" alt="저자 이미지">
+                </a>
+                <h4 class="sidebar-profile-name">zerogyun</h4>
+                
+                    <h5 class="sidebar-profile-bio"><p>문과생은 코딩을 추구하면 안되는걸까🎉🎉😎</p>
+</h5>
+                
+            </div>
+        
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="/" rel="noopener" title="Home">
+                        <i class="sidebar-button-icon fa fa-home" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Home</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="/all-categories" rel="noopener" title="카테고리">
+                        <i class="sidebar-button-icon fa fa-bookmark" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">카테고리</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="/all-tags" rel="noopener" title="태그">
+                        <i class="sidebar-button-icon fa fa-tags" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">태그</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="https://zerogyun.dev/profile" rel="noopener" title="About">
+                        <i class="sidebar-button-icon fa fa-question" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">About</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="https://github.com/cxz7720" target="_blank" rel="external nofollow noopener noreferrer" title="GitHub">
+                        <i class="sidebar-button-icon fab fa-github" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">GitHub</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="mailto:admin@zerogyun.dev" target="_blank" rel="noopener" title="Mail">
+                        <i class="sidebar-button-icon fa fa-envelope" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Mail</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+    </div>
+</nav>
+
+            
+            <div id="main" data-behavior="5" class="
+                        hasCoverMetaIn
+                        ">
+                
+<article class="post">
+    
+    
+        <div class="post-header main-content-wrap text-left">
+    
+        <h1 class="post-title">
+            오픈스택 첫걸음 - 환경구축
+        </h1>
+    
+    
+        <div class="post-meta">
+    <time datetime="2018-09-30T18:24:21+09:00">
+	
+		    2018/09/30
+    	
+    </time>
+    
+        <span>카테고리 </span>
+        
+    <a class="category-link" href="/categories/openstack/">openstack</a>
+
+
+    
+</div>
+
+    
+</div>
+
+    
+    <div class="post-content markdown">
+        <div class="main-content-wrap">
+            <!-- excerpt -->
+<p>막상 오픈스택을 공부해보겠다!! 라고 비장하게 마음먹고 환경구축부터 도전했지만 공식 홈페이지에 적혀있는 문서만으로는 역부족이었습니다.</p>
+<p>낯선 오류로 한참을 삽질하고, 새로 나온 Queens 버전과 Ubuntu 18.04 버전에서 성공한 사례는 찾기 힘들어서 여러 사이트 구글링해가며 얻은 정보들을 모아 포스팅 할 예정입니다.</p>
+<p>이 포스팅에서는 Openstack의 수많은 컴포넌트 중 Keostone, Nova, Glance, Horizon 까지만 진행합니다.</p>
+<p>시작은 오픈스택 Queens로 했지만, 스터디 진행은 SKTelecom OS-Lab의 <a href="https://github.com/sktelecom-oslab/taco-scripts" target="_blank" rel="external nofollow noopener noreferrer">TACO-Script</a>를 통해 할 예정입니다. TACO-All in One Script 관련해서도 시간이 나는대로 업로드 예정입니다.</p>
+<h2 id="Openstack-설치하기"><a href="#Openstack-설치하기" class="headerlink" title="Openstack 설치하기"></a>Openstack 설치하기</h2><h3 id="1-설치-환경"><a href="#1-설치-환경" class="headerlink" title="1) 설치 환경"></a>1) 설치 환경</h3><p>윈도우의 VirtualBox에 우분투를 설치하여 진행하였습니다.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Guest OS : Ubuntu 18.04.1 Desktop</span><br><span class="line">CPU : Ryzen R5 2600x</span><br><span class="line">HDD : 80GB 동적할당</span><br><span class="line">Network : 어댑터에 브릿지(공유기 DHCP에서 별도의 ip 할당)</span><br></pre></td></tr></table></figure>
+
+<p>참고한 링크</p>
+<ol>
+<li><p><a href="https://www.server-world.info/en/note?os=Ubuntu_18.04&p=openstack_rocky&f=1" target="_blank" rel="external nofollow noopener noreferrer">Server World - Openstack Rocky</a><br>설치 당시에는 Queens 버전으로 진행했었는데 얼마 전 Rocky 버전이 릴리즈 되었네요. 지금은 Rocky 기준으로 문서가 갱신되었습니다. 포스팅도 Rocky 기준으로 진행될 예정입니다.</p>
+</li>
+<li><p><a href="https://docs.openstack.org/install-guide/openstack-services.html#minimal-deployment-for-rocky" target="_blank" rel="external nofollow noopener noreferrer">Openstack Docs</a><br>공식 문서입니다. 설명이 다소 부족한감이 없잖아 있었습니다. 공식문서만 따라서 진행하다가 헤멘적이 꽤 많았던 기억이 있네요.</p>
+</li>
+</ol>
+<h3 id="2-Ubuntu-18-04-Desktop-설치"><a href="#2-Ubuntu-18-04-Desktop-설치" class="headerlink" title="2) Ubuntu 18.04 Desktop 설치"></a>2) Ubuntu 18.04 Desktop 설치</h3><p>  저는 Ubuntu 18.04.1 기반으로 설치했습니다.<br>  Virtualbox에서 사용자의 환경에 맞게 설정값을 바꿔주신 뒤 Guest OS를 설치하시면 됩니다.</p>
+<p>  제가 변경한 부분은 CPU 개수, 네트워크 어댑터 정도 입니다.<br>  <img src="/assets/openstack/machine_set2.PNG" alt="CPU 설정"><br>  <img src="/assets/openstack/machine_set4.PNG" alt="네트워크 설정"></p>
+<p>  설치가 완료되면  <code>sudo apt-get update -y &amp;&amp; sudo apt-get upgrade -y</code> 를 이용해 패키지 목록을 최신화하는것도 잊지 마세요.</p>
+<h3 id="3-Pre-requirements-설치"><a href="#3-Pre-requirements-설치" class="headerlink" title="3) Pre-requirements 설치"></a>3) Pre-requirements 설치</h3><p>  이제부터 모든 작업은 Root 권한에서 실행됩니다.<br>  sudo su 를 이용해 Root 유저로 변경해주세요.</p>
+<ul>
+<li><p><strong>MariaDB 설치 및 환경설정</strong><br>다음 명령어를 이용해 MariaDB를 설치합니다.<br><code>apt -y install mariadb-server</code><br>그 후 에디터를 이용해 환경설정 파일을 수정해줍니다.<br><code>/etc/mysql/mariadb.conf.d/50-server.cnf</code> 파일을 열어주세요.</p>
+<p>아래 사진과 같이 111번째 줄의 <code>utf8mb4</code>를 <code>utf8</code>로,<br>112번째 줄은 주석처리 해주세요.<br><img src="/assets/openstack/mariadb_conf.PNG" alt="mariadb.conf"></p>
+<p>그 다음 <code>systemctl restart mariadb</code> 명령어로 MarinDB 서비스를 재시작합니다.</p>
+</li>
+</ul>
+<pre><code>재시작이 완료되면 Initial Setting을 할 차례 입니다.
+`mysql_secure_installation` 를 입력하면 단계별로 설정 마법사를 이용해 단계별로 적용할 수 있습니다.
+
+`Change the root password?` 에서 `Y`를 입력해 데이터베이스의 새 root 유저 패스워드를 입력하세요.
+
+그 뒤 나오는
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Remove anonymous users?</span><br><span class="line">Disallow root login remotely?</span><br><span class="line">Remove test database and access to it?</span><br><span class="line">Reload privilege tables now?</span><br></pre></td></tr></table></figure>
+에 모두 `Y`를 입력한 뒤 마법사를 빠져나오면 됩니다.</code></pre><ul>
+<li><p><strong>오픈스택 Rocky 레포지토리 추가</strong></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">apt -y install software-properties-common </span><br><span class="line">add-apt-repository cloud-archive:rocky </span><br><span class="line">apt update </span><br><span class="line">apt -y upgrade</span><br></pre></td></tr></table></figure></li>
+<li><p><strong>RabbitMQ, Memcached 설치</strong></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">apt -y install rabbitmq-server memcached python-pymysql</span><br><span class="line">rabbitmqctl add_user openstack &#39;원하는_비밀번호_여기에_입력&#39;</span><br><span class="line">rabbitmqctl set_permissions openstack &quot;.*&quot; &quot;.*&quot; &quot;.*&quot;</span><br></pre></td></tr></table></figure>
+
+<p>순서대로 입력 후 서비스를 재시작 해줍니다.<br><code>systemctl restart rabbitmq-server</code></p>
+<p>에디터를 이용해 다시 Mariadb 설정파일을 열어 29번째 줄을 아래 이미지 같이 0.0.0.0으로 수정한 뒤 서비스를 재시작 해줍니다.<br><code>/etc/mysql/mariadb.conf.d/50-server.cnf</code><br><img src="/assets/openstack/bind_address.PNG" alt="bind-address"></p>
+<p><code>systemctl restart mariadb</code></p>
+<p>이번엔 <code>memcached</code> 설정파일을 수정합니다.<br><code>/etc/memcached.conf</code>를 열어 35번째 줄을 아래 이미지와 같이 0.0.0.0으로 수정하고 서비스를 재시작 해줍니다.<br><img src="/assets/openstack/memcached_conf.PNG" alt="memcached_conf"></p>
+<p><code>systemctl restart memcached</code></p>
+<p>환경구축이 모두 끝났습니다.<br>본격적인 Keystone설치는 다음 포스팅에 이어서 진행하도록 하겠습니다.</p>
+</li>
+</ul>
+            
+
+
+        </div>
+    </div>
+    <div id="post-footer" class="post-footer main-content-wrap">
+        
+            <div class="post-footer-tags">
+                <span class="text-color-light text-small">태그</span><br>
+                
+    <a class="tag tag--primary tag--small t-link" href="/tags/cloud/" rel="tag">cloud</a> <a class="tag tag--primary tag--small t-link" href="/tags/openstack/" rel="tag">openstack</a> <a class="tag tag--primary tag--small t-link" href="/tags/rocky/" rel="tag">rocky</a>
+
+            </div>
+        
+
+        <!-- 커스터마이징 해본 관련 글 영역-->
+        
+        
+        <div class="post-footer-tags">
+            <span class="text-color-light text-small">관련 글</span><br>
+            <ul class="popular-posts"><li class="popular-posts-item"><div class="popular-posts-title"><h3><a href="/2018/10/14/오픈스택 첫걸음 - keystone 설치 - 복사본/" title="오픈스택 첫걸음 - keystone 설치(1)" rel="bookmark">오픈스택 첫걸음 - keystone 설치(1)</a></h3></div></li></ul>
+        </div>
+        
+        <!-- 끝 -->
+        
+        
+            <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a class="post-action-btn btn btn--default tooltip--top" href="/2018/10/14/%EC%98%A4%ED%94%88%EC%8A%A4%ED%83%9D%20%EC%B2%AB%EA%B1%B8%EC%9D%8C%20-%20keystone%20%EC%84%A4%EC%B9%98%20-%20%EB%B3%B5%EC%82%AC%EB%B3%B8/" data-tooltip="오픈스택 첫걸음 - keystone 설치(1)" aria-label="이전: 오픈스택 첫걸음 - keystone 설치(1)">
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">이전</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    <a class="post-action-btn btn btn--disabled" aria-hidden="true">
+                        
+                        <span class="hide-xs hide-sm text-small icon-mr">다음</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a class="post-action-btn btn btn--default btn-open-shareoptions" href="#btn-open-shareoptions" aria-label="이 포스트 공유하기">
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://www.facebook.com/sharer/sharer.php?u=https://zerogyun.dev/2018/09/30/%EC%98%A4%ED%94%88%EC%8A%A4%ED%83%9D%20%EC%B2%AB%EA%B1%B8%EC%9D%8C%20-%20%ED%99%98%EA%B2%BD%EA%B5%AC%EC%B6%95/" title="Facebook에 공유하기" aria-label="Facebook에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://twitter.com/intent/tweet?text=https://zerogyun.dev/2018/09/30/%EC%98%A4%ED%94%88%EC%8A%A4%ED%83%9D%20%EC%B2%AB%EA%B1%B8%EC%9D%8C%20-%20%ED%99%98%EA%B2%BD%EA%B5%AC%EC%B6%95/" title="Twitter에 공유하기" aria-label="Twitter에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://plus.google.com/share?url=https://zerogyun.dev/2018/09/30/%EC%98%A4%ED%94%88%EC%8A%A4%ED%83%9D%20%EC%B2%AB%EA%B1%B8%EC%9D%8C%20-%20%ED%99%98%EA%B2%BD%EA%B5%AC%EC%B6%95/" title="Google+에 공유하기" aria-label="Google+에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+                <li class="post-action">
+                    <a class="post-action-btn btn btn--default" href="#disqus_thread" aria-label="댓글을 남겨주세요">
+                        <i class="fa fa-comment"></i>
+                    </a>
+                </li>
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="맨 위로">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+        
+        
+            
+                <div id="disqus_thread">
+    <noscript>Please enable JavaScript to view the <a href="//disqus.com/?ref_noscript" target="_blank" rel="noopener">comments powered by Disqus.</a></noscript>
+</div>
+            
+        
+    </div>
+</article>
+
+
+
+                <footer id="footer" class="main-content-wrap">
+    <span class="copyrights">
+        Copyrights &copy; 2020 zerogyun. All Rights Reserved.
+    </span>
+</footer>
+
+            </div>
+            
+                <div id="bottom-bar" class="post-bottom-bar" data-behavior="5">
+                    <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a class="post-action-btn btn btn--default tooltip--top" href="/2018/10/14/%EC%98%A4%ED%94%88%EC%8A%A4%ED%83%9D%20%EC%B2%AB%EA%B1%B8%EC%9D%8C%20-%20keystone%20%EC%84%A4%EC%B9%98%20-%20%EB%B3%B5%EC%82%AC%EB%B3%B8/" data-tooltip="오픈스택 첫걸음 - keystone 설치(1)" aria-label="이전: 오픈스택 첫걸음 - keystone 설치(1)">
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">이전</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    <a class="post-action-btn btn btn--disabled" aria-hidden="true">
+                        
+                        <span class="hide-xs hide-sm text-small icon-mr">다음</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a class="post-action-btn btn btn--default btn-open-shareoptions" href="#btn-open-shareoptions" aria-label="이 포스트 공유하기">
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://www.facebook.com/sharer/sharer.php?u=https://zerogyun.dev/2018/09/30/%EC%98%A4%ED%94%88%EC%8A%A4%ED%83%9D%20%EC%B2%AB%EA%B1%B8%EC%9D%8C%20-%20%ED%99%98%EA%B2%BD%EA%B5%AC%EC%B6%95/" title="Facebook에 공유하기" aria-label="Facebook에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://twitter.com/intent/tweet?text=https://zerogyun.dev/2018/09/30/%EC%98%A4%ED%94%88%EC%8A%A4%ED%83%9D%20%EC%B2%AB%EA%B1%B8%EC%9D%8C%20-%20%ED%99%98%EA%B2%BD%EA%B5%AC%EC%B6%95/" title="Twitter에 공유하기" aria-label="Twitter에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://plus.google.com/share?url=https://zerogyun.dev/2018/09/30/%EC%98%A4%ED%94%88%EC%8A%A4%ED%83%9D%20%EC%B2%AB%EA%B1%B8%EC%9D%8C%20-%20%ED%99%98%EA%B2%BD%EA%B5%AC%EC%B6%95/" title="Google+에 공유하기" aria-label="Google+에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+                <li class="post-action">
+                    <a class="post-action-btn btn btn--default" href="#disqus_thread" aria-label="댓글을 남겨주세요">
+                        <i class="fa fa-comment"></i>
+                    </a>
+                </li>
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="맨 위로">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+                </div>
+                
+    <div id="share-options-bar" class="share-options-bar" data-behavior="5">
+        <i id="btn-close-shareoptions" class="fa fa-times"></i>
+        <ul class="share-options">
+            
+                
+                
+                <li class="share-option">
+                    <a class="share-option-btn" target="_blank" href="https://www.facebook.com/sharer/sharer.php?u=https://zerogyun.dev/2018/09/30/%EC%98%A4%ED%94%88%EC%8A%A4%ED%83%9D%20%EC%B2%AB%EA%B1%B8%EC%9D%8C%20-%20%ED%99%98%EA%B2%BD%EA%B5%AC%EC%B6%95/" aria-label="Facebook에 공유하기" rel="external nofollow noopener noreferrer">
+                        <i class="fab fa-facebook" aria-hidden="true"></i><span>Facebook에 공유하기</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a class="share-option-btn" target="_blank" href="https://twitter.com/intent/tweet?text=https://zerogyun.dev/2018/09/30/%EC%98%A4%ED%94%88%EC%8A%A4%ED%83%9D%20%EC%B2%AB%EA%B1%B8%EC%9D%8C%20-%20%ED%99%98%EA%B2%BD%EA%B5%AC%EC%B6%95/" aria-label="Twitter에 공유하기" rel="external nofollow noopener noreferrer">
+                        <i class="fab fa-twitter" aria-hidden="true"></i><span>Twitter에 공유하기</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a class="share-option-btn" target="_blank" href="https://plus.google.com/share?url=https://zerogyun.dev/2018/09/30/%EC%98%A4%ED%94%88%EC%8A%A4%ED%83%9D%20%EC%B2%AB%EA%B1%B8%EC%9D%8C%20-%20%ED%99%98%EA%B2%BD%EA%B5%AC%EC%B6%95/" aria-label="Google+에 공유하기" rel="external nofollow noopener noreferrer">
+                        <i class="fab fa-google-plus" aria-hidden="true"></i><span>Google+에 공유하기</span>
+                    </a>
+                </li>
+            
+        </ul>
+    </div>
+
+
+            
+        </div>
+        
+
+
+    
+        
+    
+
+<div id="about">
+    <div id="about-card">
+        <div id="about-btn-close">
+            <i class="fa fa-times"></i>
+        </div>
+        
+            <img id="about-card-picture" src="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4" alt="저자 이미지">
+        
+            <h4 id="about-card-name">zerogyun</h4>
+        
+            <div id="about-card-bio"><p>문과생은 코딩을 추구하면 안되는걸까🎉🎉😎</p>
+</div>
+        
+        
+            <div id="about-card-job">
+                <i class="fa fa-briefcase"></i>
+                <br>
+                <p>Student</p>
+
+            </div>
+        
+        
+            <div id="about-card-location">
+                <i class="fa fa-map-marker-alt"></i>
+                <br>
+                Seoul, South Korea
+            </div>
+        
+    </div>
+</div>
+
+        
+        
+<div id="cover" style="background-image:url('https://user-images.githubusercontent.com/29659112/76057866-1e009100-5fbe-11ea-84fe-00462e469e66.png');"></div>
+        <!--SCRIPTS-->
+
+<script src="/assets/js/script-0b9br5vpq85plmwdvtw8yqgpyj40cgb2lzib27pnr2wpe2cbodzjvxx71b2q.min.js"></script>
+
+<!--SCRIPTS END-->
+
+
+    
+        <script>
+          var disqus_config = function() {
+            this.page.url = 'https://zerogyun.dev/2018/09/30/%EC%98%A4%ED%94%88%EC%8A%A4%ED%83%9D%20%EC%B2%AB%EA%B1%B8%EC%9D%8C%20-%20%ED%99%98%EA%B2%BD%EA%B5%AC%EC%B6%95/';
+              
+            this.page.identifier = '2018/09/30/오픈스택 첫걸음 - 환경구축/';
+              
+          };
+          (function() {
+            var d = document, s = d.createElement('script');
+            var disqus_shortname = 'cxz7720-github-io-1';
+            s.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+
+            s.setAttribute('data-timestamp', +new Date());
+            (d.head || d.body).appendChild(s);
+          })();
+        </script>
+    
+
+
+
+
+    </body>
+</html>

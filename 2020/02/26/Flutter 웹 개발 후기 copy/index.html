@@ -1,0 +1,552 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+    
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="generator" content="사다리타기">
+    <title>Flutter 웹 개발 후기 - 사다리타기</title>
+    <meta name="author" content="zerogyun">
+    <link rel="canonical" href="https://zerogyun.dev/2020/02/26/flutter 웹 개발 후기 copy/">
+    
+    
+    
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"zerogyun","sameAs":["https://github.com/cxz7720","mailto:admin@zerogyun.dev"],"image":"https://avatars1.githubusercontent.com/u/29659112?s=460&v=4"},"articleBody":"Flutter 로 web 개발을 추구하면 안되는걸까? 포스팅에 이어 적는 개발후기 입니다.\n\nFlutter로 Web 개발을 추구해 보았습니다.\n이전글 : Flutter에서 web을 추구하면 안되는걸까\n\n개발환경제가 Flutter를 사용한 환경은 다음과 같습니다.\n\nOS : Windows 10 x64 1903\nFlutter version : Channel beta, v1.14.6\nDart version : 2.8.0\nIDE : IntelliJ IDEA Ultimate Edition(v2019.3) / Flutter Plugin v43.0.3 / Dart Plugin version 193.6015.53\nBrowser : Google Chrome 79.0.3945.130\n\n결과물 미리보기먼저 Flutter 로 만들어진 간단한 정적 웹 페이지 입니다.제 소개 페이지를 간단하게 만들어 보았는데요, 아래 링크로 접속해서 확인하실 수 있습니다.\n\nzerogyun’s portfolio\nSource Code\n\n여기부터는 주관적인 소감 위주의 내용 입니다.\nFlutter 웹개발의 좋았던점1. Widget 구조 덕분에 레이아웃 그리기가 쉬웠습니다.   프론트엔드 개발도 몇번 해보았지만 안드로이드에서 하듯이 위젯만 잘 배치해주면 생각보다 쉽게 구조가 완성됩니다. 제 생각에는 이게 가장 큰 메리트가 아닐까 싶습니다.\n2. 이것은 앱인가 웹인가위아래로 긴 페이지를 스크롤 할때 보면 드래그 액션을 사용할 수 있습니다. 마치 우리가 안드로이드에서 그렇듯이요. 이걸 장점에 넣은 이유는 새로운 사용자 경험을 줄 수 있다고 생각 (이라고 적고 포장 이라고 읽는다..) 해서 였습니다. 하지만 이것 때문에 발생하는 문제도 있는데 이건 단점에서 적도록 하겠습니다.\nFlutter 웹개발의 불편한점베타는 아직 베타..가장 큰 문제입니다. 이 글이 작성되는 2020년 2월 기준, Flutter 로 웹개발 기능을 활성화 하기 위해서는 beta 채널을 이용할것을 공식문서가 권장하고 있습니다.\n사실 Flutter 자체가 나온지 얼마 안되어서 Github 레포를 들어가보면 매일같이 쏟아지는 무수한 이슈의 요청을 확인하실 수 있는데요, 그만큼 자잘한 버그가 굉장히 많습니다.\n아래는 제가 경험한 대표적인 몇가지 이슈입니다.\n이미지 삽입을 위해서는 Images.network를 이용해야 합니다.일반적으로 이미지 삽입을 위해서 이용하던 Images.asset 위젯을 사용할 수 없습니다.해당 위젯 사용시 pubspec.yaml에 지정된 경로를 찾지 못하고 404 에러를 발생시킵니다.현재 Flutter WEB 에서 로컬 에셋 이미지를 불러오기 위해서는 WWW폴더 하위에 이미지를 놓고, Images.network 나 NetworkImage 같은 위젯을 이용해야만 정상적으로 이미지가 로드됩니다.\n해당 부분은 이슈로 등록해두었습니다. issue#50349, issue#43966\n날카로운 폰트 렌더링이건 제 주관적인 느낌입니다만, 보편적인 웹 페이지와 달리 Flutter 로 만들어진 페이지의 웹 폰트 렌더링이 조금 더 다듬어지지 못하고, 날카로운 느낌입니다. 제가 사용한 폰트는 Google Fonts 의 Noto Sans KR, Spoqa Han Sans KR 입니다.자세한건 아래 사진으로 확인해 보세요.\n브라우저마다 렌더링 되는 모양이 다릅니다.일반적으로 Chrome을 이용해서 개발하시겠지만, Firefox만 해도 화면 렌더링이 달라져서 전체적으로 UI가 틀어집니다.정확히 말하면 User Agent 쪽과 더욱 밀접한 관련이 있다고 할수 있습니다.이 링크 를 보시면 Font Clipping 에 관련한 이슈인데, 확장프로그램을 이용해서 UserAgent를 바꿔주는 것 만으로도 어느정도해결이 가능한 현상이었습니다.현재는 이슈로 등록되어 March 2020 마일스톤으로 지정되어 있는 상태입니다.issue#49946\n스크롤 퍼포먼스가 매우 나쁩니다.기본적으로 마우스 휠 스크롤이 굉장히 뚝뚝 끊깁니다. Chrome 개발자도구의 Performance Test 도구로 측정해 본 결과, 스크롤이벤트 발생시 프레임드랍이 굉장히 심한것을 알 수 있었습니다.\n그나마 스크롤이 아닌 드래그를 할 경우에는 조금 낫습니다만, 이 역시 쾌적하지는 않습니다.\n주변 지인들이 제 페이지를 처음 접속해서 느낀점이 스크롤이 굉장히 ‘구리다’ 라고 평가할 정도로 스크롤 퍼포먼스가 좋지 않습니다.\n제가 사용한 스크롤 방식은 Listview 를 사용했지만, SingleChildScrollView 를 사용했을때도 크게 나아지지는 않았습니다.\n결론Flutter 로 웹페이지를 제작해본건 상당히 재미있는 일이었습니다.프론트엔드 작업은 주로 Vue.js를 이용해서 하고 있었는데 Flutter로 레이아웃을 직접 그려가며 해보니 Vue와는 또 다른 매력이 있었습니다.\n하지만 개발 과정에서 여러 난관을 만나고, 공식문서보다는 Github Issue 페이지가 좀 더 도움이 되는걸 보니 아직은 역시 갈 길이 멀다고 느껴졌습니다.\n그래도 뭔가 색다른 방향으로 웹개발을 해볼 수 있어서 의미있었던 프로젝트였습니다.\n","dateCreated":"2020-02-26T18:23:21+09:00","dateModified":"2020-07-26T04:26:32+09:00","datePublished":"2020-02-26T18:23:21+09:00","description":"Flutter 로 web 개발을 추구하면 안되는걸까? 포스팅에 이어 적는 개발후기 입니다.","headline":"Flutter 웹 개발 후기","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"https://zerogyun.dev/2020/02/26/Flutter%20%EC%9B%B9%20%EA%B0%9C%EB%B0%9C%20%ED%9B%84%EA%B8%B0%20copy/"},"publisher":{"@type":"Organization","name":"zerogyun","sameAs":["https://github.com/cxz7720","mailto:admin@zerogyun.dev"],"image":"https://avatars1.githubusercontent.com/u/29659112?s=460&v=4","logo":{"@type":"ImageObject","url":"https://avatars1.githubusercontent.com/u/29659112?s=460&v=4"}},"url":"https://zerogyun.dev/2020/02/26/Flutter%20%EC%9B%B9%20%EA%B0%9C%EB%B0%9C%20%ED%9B%84%EA%B8%B0%20copy/","keywords":"Flutter, web, dart"}</script>
+    <meta name="description" content="Flutter 로 web 개발을 추구하면 안되는걸까? 포스팅에 이어 적는 개발후기 입니다.">
+<meta property="og:type" content="blog">
+<meta property="og:title" content="Flutter 웹 개발 후기">
+<meta property="og:url" content="https://zerogyun.dev/2020/02/26/Flutter%20%EC%9B%B9%20%EA%B0%9C%EB%B0%9C%20%ED%9B%84%EA%B8%B0%20copy/index.html">
+<meta property="og:site_name" content="사다리타기">
+<meta property="og:description" content="Flutter 로 web 개발을 추구하면 안되는걸까? 포스팅에 이어 적는 개발후기 입니다.">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:image" content="https://user-images.githubusercontent.com/29659112/75315072-f9f9cd00-58a4-11ea-988f-7cf78c65dd32.png">
+<meta property="og:image" content="https://user-images.githubusercontent.com/29659112/75317311-054ff700-58ab-11ea-9e20-793bf66cd6e0.png">
+<meta property="og:image" content="https://user-images.githubusercontent.com/29659112/75316777-945c0f80-58a9-11ea-8f92-66f24f073683.png">
+<meta property="article:published_time" content="2020-02-26T09:23:21.000Z">
+<meta property="article:modified_time" content="2020-07-25T19:26:32.844Z">
+<meta property="article:author" content="zerogyun">
+<meta property="article:tag" content="Flutter">
+<meta property="article:tag" content="web">
+<meta property="article:tag" content="dart">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://user-images.githubusercontent.com/29659112/75315072-f9f9cd00-58a4-11ea-988f-7cf78c65dd32.png">
+    
+    
+        
+    
+    
+        <meta property="og:image" content="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4">
+    
+    
+    
+    
+    <!--STYLES-->
+    
+<link rel="stylesheet" href="/assets/css/style-gfvy1paadnhrenematj51np8g8cfvu4k1avie6z7jqeilszkarsav8zxtmuu.min.css">
+
+    <!--STYLES END-->
+    
+    <script async src="https://www.googletagmanager.com/gtag/js?id=UA-126694602-3"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+
+        gtag('config', 'UA-126694602-3');
+    </script>
+
+
+    
+
+    
+        
+    
+</head>
+
+    <body>
+        <div id="blog">
+            <!-- Define author's picture -->
+
+
+    
+        
+            
+        
+    
+
+<header id="header" data-behavior="5">
+    <i id="btn-open-sidebar" class="fa fa-lg fa-bars"></i>
+    <div class="header-title">
+        <a class="header-title-link" href="/" aria-label>
+            사다리타기
+        </a>
+    </div>
+    
+        
+            <a class="header-right-picture " href="#about" aria-label="링크 열기: /#about">
+        
+        
+            <img class="header-picture" src="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4" alt="저자 이미지">
+        
+        </a>
+    
+</header>
+
+            <!-- Define author's picture -->
+
+
+
+        
+    
+
+<nav id="sidebar" data-behavior="5">
+    <div class="sidebar-container">
+        
+            <div class="sidebar-profile">
+                <a href="/#about" aria-label="저자에 대해 더 알아보기">
+                    <img class="sidebar-profile-picture" src="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4" alt="저자 이미지">
+                </a>
+                <h4 class="sidebar-profile-name">zerogyun</h4>
+                
+                    <h5 class="sidebar-profile-bio"><p>문과생은 코딩을 추구하면 안되는걸까🎉🎉😎</p>
+</h5>
+                
+            </div>
+        
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="/" rel="noopener" title="Home">
+                        <i class="sidebar-button-icon fa fa-home" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Home</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="/all-categories" rel="noopener" title="카테고리">
+                        <i class="sidebar-button-icon fa fa-bookmark" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">카테고리</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="/all-tags" rel="noopener" title="태그">
+                        <i class="sidebar-button-icon fa fa-tags" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">태그</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="https://zerogyun.dev/profile" rel="noopener" title="About">
+                        <i class="sidebar-button-icon fa fa-question" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">About</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="https://github.com/cxz7720" target="_blank" rel="external nofollow noopener noreferrer" title="GitHub">
+                        <i class="sidebar-button-icon fab fa-github" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">GitHub</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="mailto:admin@zerogyun.dev" target="_blank" rel="noopener" title="Mail">
+                        <i class="sidebar-button-icon fa fa-envelope" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Mail</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+    </div>
+</nav>
+
+            
+            <div id="main" data-behavior="5" class="
+                        hasCoverMetaIn
+                        ">
+                
+<article class="post">
+    
+    
+        <div class="post-header main-content-wrap text-left">
+    
+        <h1 class="post-title">
+            Flutter 웹 개발 후기
+        </h1>
+    
+    
+        <div class="post-meta">
+    <time datetime="2020-02-26T18:23:21+09:00">
+	
+		    2020/02/26
+    	
+    </time>
+    
+        <span>카테고리 </span>
+        
+    <a class="category-link" href="/categories/Flutter/">Flutter</a>
+
+
+    
+</div>
+
+    
+</div>
+
+    
+    <div class="post-content markdown">
+        <div class="main-content-wrap">
+            <p>Flutter 로 web 개발을 추구하면 안되는걸까? 포스팅에 이어 적는 개발후기 입니다.</p>
+<a id="more"></a>
+<h1 id="Flutter로-Web-개발을-추구해-보았습니다"><a href="#Flutter로-Web-개발을-추구해-보았습니다" class="headerlink" title="Flutter로 Web 개발을 추구해 보았습니다."></a>Flutter로 Web 개발을 추구해 보았습니다.</h1><ul>
+<li><a href="https://zerogyun.dev/flutter/2020/02/07/Flutter에서-web을-추구하면-안되는걸까.html">이전글 : Flutter에서 web을 추구하면 안되는걸까</a></li>
+</ul>
+<h2 id="개발환경"><a href="#개발환경" class="headerlink" title="개발환경"></a>개발환경</h2><p>제가 Flutter를 사용한 환경은 다음과 같습니다.</p>
+<ul>
+<li>OS : Windows 10 x64 1903</li>
+<li>Flutter version : Channel beta, v1.14.6</li>
+<li>Dart version : 2.8.0</li>
+<li>IDE : IntelliJ IDEA Ultimate Edition(v2019.3) / Flutter Plugin v43.0.3 / Dart Plugin version 193.6015.53</li>
+<li>Browser : Google Chrome 79.0.3945.130</li>
+</ul>
+<h2 id="결과물-미리보기"><a href="#결과물-미리보기" class="headerlink" title="결과물 미리보기"></a>결과물 미리보기</h2><p>먼저 Flutter 로 만들어진 간단한 정적 웹 페이지 입니다.<br>제 소개 페이지를 간단하게 만들어 보았는데요, 아래 링크로 접속해서 확인하실 수 있습니다.</p>
+<ul>
+<li><a href="https://zerogyun.dev/portfolio">zerogyun’s portfolio</a></li>
+<li><a href="https://github.com/CXZ7720/Portfolio_flutter" target="_blank" rel="external nofollow noopener noreferrer">Source Code</a></li>
+</ul>
+<p><br><br><br>여기부터는 주관적인 소감 위주의 내용 입니다.</p>
+<h2 id="Flutter-웹개발의-좋았던점"><a href="#Flutter-웹개발의-좋았던점" class="headerlink" title="Flutter 웹개발의 좋았던점"></a>Flutter 웹개발의 좋았던점</h2><h4 id="1-Widget-구조-덕분에-레이아웃-그리기가-쉬웠습니다"><a href="#1-Widget-구조-덕분에-레이아웃-그리기가-쉬웠습니다" class="headerlink" title="1. Widget 구조 덕분에 레이아웃 그리기가 쉬웠습니다."></a>1. Widget 구조 덕분에 레이아웃 그리기가 쉬웠습니다.</h4><p>   프론트엔드 개발도 몇번 해보았지만 안드로이드에서 하듯이 위젯만 잘 배치해주면 생각보다 쉽게 구조가 완성됩니다. 제 생각에는 이게 가장 큰 메리트가 아닐까 싶습니다.</p>
+<h4 id="2-이것은-앱인가-웹인가"><a href="#2-이것은-앱인가-웹인가" class="headerlink" title="2. 이것은 앱인가 웹인가"></a>2. 이것은 앱인가 웹인가</h4><p>위아래로 긴 페이지를 스크롤 할때 보면 드래그 액션을 사용할 수 있습니다. 마치 우리가 안드로이드에서 그렇듯이요. 이걸 장점에 넣은 이유는 새로운 사용자 경험을 줄 수 있다고 생각 <em>(이라고 적고 포장 이라고 읽는다..)</em> 해서 였습니다. 하지만 이것 때문에 발생하는 문제도 있는데 이건 단점에서 적도록 하겠습니다.</p>
+<h2 id="Flutter-웹개발의-불편한점"><a href="#Flutter-웹개발의-불편한점" class="headerlink" title="Flutter 웹개발의 불편한점"></a>Flutter 웹개발의 불편한점</h2><h3 id="베타는-아직-베타"><a href="#베타는-아직-베타" class="headerlink" title="베타는 아직 베타.."></a>베타는 아직 베타..</h3><p>가장 큰 문제입니다. 이 글이 작성되는 2020년 2월 기준, Flutter 로 웹개발 기능을 활성화 하기 위해서는 beta 채널을 이용할것을 <strong>공식문서가 권장하고 있습니다.</strong></p>
+<p>사실 Flutter 자체가 나온지 얼마 안되어서 Github 레포를 들어가보면 매일같이 쏟아지는 무수한 이슈의 요청을 확인하실 수 있는데요, 그만큼 자잘한 버그가 굉장히 많습니다.</p>
+<p>아래는 제가 경험한 대표적인 몇가지 이슈입니다.</p>
+<h4 id="이미지-삽입을-위해서는-Images-network를-이용해야-합니다"><a href="#이미지-삽입을-위해서는-Images-network를-이용해야-합니다" class="headerlink" title="이미지 삽입을 위해서는 Images.network를 이용해야 합니다."></a>이미지 삽입을 위해서는 <code>Images.network</code>를 이용해야 합니다.</h4><p>일반적으로 이미지 삽입을 위해서 이용하던 <code>Images.asset</code> 위젯을 사용할 수 없습니다.<br>해당 위젯 사용시 <code>pubspec.yaml</code>에 지정된 경로를 찾지 못하고 404 에러를 발생시킵니다.<br>현재 Flutter WEB 에서 로컬 에셋 이미지를 불러오기 위해서는 WWW폴더 하위에 이미지를 놓고, <code>Images.network</code> 나 <code>NetworkImage</code> 같은 위젯을 이용해야만 정상적으로 이미지가 로드됩니다.</p>
+<p>해당 부분은 이슈로 등록해두었습니다. <a href="https://github.com/flutter/flutter/issues/50349" target="_blank" rel="external nofollow noopener noreferrer">issue#50349</a>, <a href="https://github.com/flutter/flutter/issues/43966" target="_blank" rel="external nofollow noopener noreferrer">issue#43966</a></p>
+<h4 id="날카로운-폰트-렌더링"><a href="#날카로운-폰트-렌더링" class="headerlink" title="날카로운 폰트 렌더링"></a>날카로운 폰트 렌더링</h4><p>이건 제 주관적인 느낌입니다만, 보편적인 웹 페이지와 달리 Flutter 로 만들어진 페이지의 웹 폰트 렌더링이 조금 더 다듬어지지 못하고, 날카로운 느낌입니다. 제가 사용한 폰트는 Google Fonts 의 Noto Sans KR, Spoqa Han Sans KR 입니다.<br>자세한건 아래 사진으로 확인해 보세요.<br><img src="https://user-images.githubusercontent.com/29659112/75315072-f9f9cd00-58a4-11ea-988f-7cf78c65dd32.png" alt="image"></p>
+<h4 id="브라우저마다-렌더링-되는-모양이-다릅니다"><a href="#브라우저마다-렌더링-되는-모양이-다릅니다" class="headerlink" title="브라우저마다 렌더링 되는 모양이 다릅니다."></a>브라우저마다 렌더링 되는 모양이 다릅니다.</h4><p>일반적으로 Chrome을 이용해서 개발하시겠지만, Firefox만 해도 화면 렌더링이 달라져서 전체적으로 UI가 틀어집니다.<br>정확히 말하면 User Agent 쪽과 더욱 밀접한 관련이 있다고 할수 있습니다.<br><a href="https://github.com/flutter/flutter/issues/50631#issuecomment-585931461" target="_blank" rel="external nofollow noopener noreferrer">이 링크</a> 를 보시면 Font Clipping 에 관련한 이슈인데, 확장프로그램을 이용해서 UserAgent를 바꿔주는 것 만으로도 어느정도해결이 가능한 현상이었습니다.<br>현재는 이슈로 등록되어 March 2020 마일스톤으로 지정되어 있는 상태입니다.<br><a href="https://github.com/flutter/flutter/issues/49946" target="_blank" rel="external nofollow noopener noreferrer">issue#49946</a></p>
+<h4 id="스크롤-퍼포먼스가-매우-나쁩니다"><a href="#스크롤-퍼포먼스가-매우-나쁩니다" class="headerlink" title="스크롤 퍼포먼스가 매우 나쁩니다."></a>스크롤 퍼포먼스가 매우 나쁩니다.</h4><p>기본적으로 마우스 휠 스크롤이 굉장히 뚝뚝 끊깁니다. Chrome 개발자도구의 Performance Test 도구로 측정해 본 결과, 스크롤이벤트 발생시 프레임드랍이 굉장히 심한것을 알 수 있었습니다.<br><img src="https://user-images.githubusercontent.com/29659112/75317311-054ff700-58ab-11ea-9e20-793bf66cd6e0.png" alt="image"></p>
+<p>그나마 스크롤이 아닌 드래그를 할 경우에는 조금 낫습니다만, 이 역시 쾌적하지는 않습니다.<br><img src="https://user-images.githubusercontent.com/29659112/75316777-945c0f80-58a9-11ea-8f92-66f24f073683.png" alt="image"></p>
+<p>주변 지인들이 제 페이지를 처음 접속해서 느낀점이 스크롤이 굉장히 ‘구리다’ 라고 평가할 정도로 스크롤 퍼포먼스가 좋지 않습니다.</p>
+<p>제가 사용한 스크롤 방식은 Listview 를 사용했지만, SingleChildScrollView 를 사용했을때도 크게 나아지지는 않았습니다.</p>
+<h2 id="결론"><a href="#결론" class="headerlink" title="결론"></a>결론</h2><p>Flutter 로 웹페이지를 제작해본건 상당히 재미있는 일이었습니다.<br>프론트엔드 작업은 주로 Vue.js를 이용해서 하고 있었는데 Flutter로 레이아웃을 직접 그려가며 해보니 Vue와는 또 다른 매력이 있었습니다.</p>
+<p>하지만 개발 과정에서 여러 난관을 만나고, 공식문서보다는 Github Issue 페이지가 좀 더 도움이 되는걸 보니 아직은 역시 갈 길이 멀다고 느껴졌습니다.</p>
+<p>그래도 뭔가 색다른 방향으로 웹개발을 해볼 수 있어서 의미있었던 프로젝트였습니다.</p>
+
+            
+
+
+        </div>
+    </div>
+    <div id="post-footer" class="post-footer main-content-wrap">
+        
+            <div class="post-footer-tags">
+                <span class="text-color-light text-small">태그</span><br>
+                
+    <a class="tag tag--primary tag--small t-link" href="/tags/Flutter/" rel="tag">Flutter</a> <a class="tag tag--primary tag--small t-link" href="/tags/dart/" rel="tag">dart</a> <a class="tag tag--primary tag--small t-link" href="/tags/web/" rel="tag">web</a>
+
+            </div>
+        
+
+        <!-- 커스터마이징 해본 관련 글 영역-->
+        
+        
+        <div class="post-footer-tags">
+            <span class="text-color-light text-small">관련 글</span><br>
+            <ul class="popular-posts"><li class="popular-posts-item"><div class="popular-posts-title"><h3><a href="/2020/02/07/Flutter에서 web을 추구하면 안되는걸까/" title="Flutter 에서 WEB을 추구하면 안되는걸까" rel="bookmark">Flutter 에서 WEB을 추구하면 안되는걸까</a></h3></div></li></ul>
+        </div>
+        
+        <!-- 끝 -->
+        
+        
+            <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a class="post-action-btn btn btn--default tooltip--top" href="/2020/03/03/Naver-Band-%ED%81%AC%EB%A1%A4%EB%9F%AC-%EC%A0%9C%EC%9E%91%EA%B8%B0/" data-tooltip="Naver Band API와 텔레그램을 이용한 맞춤형 새글 알림 챗봇 제작기" aria-label="이전: Naver Band API와 텔레그램을 이용한 맞춤형 새글 알림 챗봇 제작기">
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">이전</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a class="post-action-btn btn btn--default tooltip--top" href="/2020/02/07/Flutter%EC%97%90%EC%84%9C%20web%EC%9D%84%20%EC%B6%94%EA%B5%AC%ED%95%98%EB%A9%B4%20%EC%95%88%EB%90%98%EB%8A%94%EA%B1%B8%EA%B9%8C/" data-tooltip="Flutter 에서 WEB을 추구하면 안되는걸까" aria-label="다음: Flutter 에서 WEB을 추구하면 안되는걸까">
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">다음</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a class="post-action-btn btn btn--default btn-open-shareoptions" href="#btn-open-shareoptions" aria-label="이 포스트 공유하기">
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://www.facebook.com/sharer/sharer.php?u=https://zerogyun.dev/2020/02/26/Flutter%20%EC%9B%B9%20%EA%B0%9C%EB%B0%9C%20%ED%9B%84%EA%B8%B0%20copy/" title="Facebook에 공유하기" aria-label="Facebook에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://twitter.com/intent/tweet?text=https://zerogyun.dev/2020/02/26/Flutter%20%EC%9B%B9%20%EA%B0%9C%EB%B0%9C%20%ED%9B%84%EA%B8%B0%20copy/" title="Twitter에 공유하기" aria-label="Twitter에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://plus.google.com/share?url=https://zerogyun.dev/2020/02/26/Flutter%20%EC%9B%B9%20%EA%B0%9C%EB%B0%9C%20%ED%9B%84%EA%B8%B0%20copy/" title="Google+에 공유하기" aria-label="Google+에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+                <li class="post-action">
+                    <a class="post-action-btn btn btn--default" href="#disqus_thread" aria-label="댓글을 남겨주세요">
+                        <i class="fa fa-comment"></i>
+                    </a>
+                </li>
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="맨 위로">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+        
+        
+            
+                <div id="disqus_thread">
+    <noscript>Please enable JavaScript to view the <a href="//disqus.com/?ref_noscript" target="_blank" rel="noopener">comments powered by Disqus.</a></noscript>
+</div>
+            
+        
+    </div>
+</article>
+
+
+
+                <footer id="footer" class="main-content-wrap">
+    <span class="copyrights">
+        Copyrights &copy; 2020 zerogyun. All Rights Reserved.
+    </span>
+</footer>
+
+            </div>
+            
+                <div id="bottom-bar" class="post-bottom-bar" data-behavior="5">
+                    <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a class="post-action-btn btn btn--default tooltip--top" href="/2020/03/03/Naver-Band-%ED%81%AC%EB%A1%A4%EB%9F%AC-%EC%A0%9C%EC%9E%91%EA%B8%B0/" data-tooltip="Naver Band API와 텔레그램을 이용한 맞춤형 새글 알림 챗봇 제작기" aria-label="이전: Naver Band API와 텔레그램을 이용한 맞춤형 새글 알림 챗봇 제작기">
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">이전</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a class="post-action-btn btn btn--default tooltip--top" href="/2020/02/07/Flutter%EC%97%90%EC%84%9C%20web%EC%9D%84%20%EC%B6%94%EA%B5%AC%ED%95%98%EB%A9%B4%20%EC%95%88%EB%90%98%EB%8A%94%EA%B1%B8%EA%B9%8C/" data-tooltip="Flutter 에서 WEB을 추구하면 안되는걸까" aria-label="다음: Flutter 에서 WEB을 추구하면 안되는걸까">
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">다음</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a class="post-action-btn btn btn--default btn-open-shareoptions" href="#btn-open-shareoptions" aria-label="이 포스트 공유하기">
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://www.facebook.com/sharer/sharer.php?u=https://zerogyun.dev/2020/02/26/Flutter%20%EC%9B%B9%20%EA%B0%9C%EB%B0%9C%20%ED%9B%84%EA%B8%B0%20copy/" title="Facebook에 공유하기" aria-label="Facebook에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://twitter.com/intent/tweet?text=https://zerogyun.dev/2020/02/26/Flutter%20%EC%9B%B9%20%EA%B0%9C%EB%B0%9C%20%ED%9B%84%EA%B8%B0%20copy/" title="Twitter에 공유하기" aria-label="Twitter에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://plus.google.com/share?url=https://zerogyun.dev/2020/02/26/Flutter%20%EC%9B%B9%20%EA%B0%9C%EB%B0%9C%20%ED%9B%84%EA%B8%B0%20copy/" title="Google+에 공유하기" aria-label="Google+에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+                <li class="post-action">
+                    <a class="post-action-btn btn btn--default" href="#disqus_thread" aria-label="댓글을 남겨주세요">
+                        <i class="fa fa-comment"></i>
+                    </a>
+                </li>
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="맨 위로">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+                </div>
+                
+    <div id="share-options-bar" class="share-options-bar" data-behavior="5">
+        <i id="btn-close-shareoptions" class="fa fa-times"></i>
+        <ul class="share-options">
+            
+                
+                
+                <li class="share-option">
+                    <a class="share-option-btn" target="_blank" href="https://www.facebook.com/sharer/sharer.php?u=https://zerogyun.dev/2020/02/26/Flutter%20%EC%9B%B9%20%EA%B0%9C%EB%B0%9C%20%ED%9B%84%EA%B8%B0%20copy/" aria-label="Facebook에 공유하기" rel="external nofollow noopener noreferrer">
+                        <i class="fab fa-facebook" aria-hidden="true"></i><span>Facebook에 공유하기</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a class="share-option-btn" target="_blank" href="https://twitter.com/intent/tweet?text=https://zerogyun.dev/2020/02/26/Flutter%20%EC%9B%B9%20%EA%B0%9C%EB%B0%9C%20%ED%9B%84%EA%B8%B0%20copy/" aria-label="Twitter에 공유하기" rel="external nofollow noopener noreferrer">
+                        <i class="fab fa-twitter" aria-hidden="true"></i><span>Twitter에 공유하기</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a class="share-option-btn" target="_blank" href="https://plus.google.com/share?url=https://zerogyun.dev/2020/02/26/Flutter%20%EC%9B%B9%20%EA%B0%9C%EB%B0%9C%20%ED%9B%84%EA%B8%B0%20copy/" aria-label="Google+에 공유하기" rel="external nofollow noopener noreferrer">
+                        <i class="fab fa-google-plus" aria-hidden="true"></i><span>Google+에 공유하기</span>
+                    </a>
+                </li>
+            
+        </ul>
+    </div>
+
+
+            
+        </div>
+        
+
+
+    
+        
+    
+
+<div id="about">
+    <div id="about-card">
+        <div id="about-btn-close">
+            <i class="fa fa-times"></i>
+        </div>
+        
+            <img id="about-card-picture" src="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4" alt="저자 이미지">
+        
+            <h4 id="about-card-name">zerogyun</h4>
+        
+            <div id="about-card-bio"><p>문과생은 코딩을 추구하면 안되는걸까🎉🎉😎</p>
+</div>
+        
+        
+            <div id="about-card-job">
+                <i class="fa fa-briefcase"></i>
+                <br>
+                <p>Student</p>
+
+            </div>
+        
+        
+            <div id="about-card-location">
+                <i class="fa fa-map-marker-alt"></i>
+                <br>
+                Seoul, South Korea
+            </div>
+        
+    </div>
+</div>
+
+        
+        
+<div id="cover" style="background-image:url('https://user-images.githubusercontent.com/29659112/76057866-1e009100-5fbe-11ea-84fe-00462e469e66.png');"></div>
+        <!--SCRIPTS-->
+
+<script src="/assets/js/script-0b9br5vpq85plmwdvtw8yqgpyj40cgb2lzib27pnr2wpe2cbodzjvxx71b2q.min.js"></script>
+
+<!--SCRIPTS END-->
+
+
+    
+        <script>
+          var disqus_config = function() {
+            this.page.url = 'https://zerogyun.dev/2020/02/26/Flutter%20%EC%9B%B9%20%EA%B0%9C%EB%B0%9C%20%ED%9B%84%EA%B8%B0%20copy/';
+              
+            this.page.identifier = '2020/02/26/Flutter 웹 개발 후기 copy/';
+              
+          };
+          (function() {
+            var d = document, s = d.createElement('script');
+            var disqus_shortname = 'cxz7720-github-io-1';
+            s.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+
+            s.setAttribute('data-timestamp', +new Date());
+            (d.head || d.body).appendChild(s);
+          })();
+        </script>
+    
+
+
+
+
+    </body>
+</html>
