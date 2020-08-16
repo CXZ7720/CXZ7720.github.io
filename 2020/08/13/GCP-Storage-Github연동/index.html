@@ -1,0 +1,537 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+    
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="generator" content="사다리타기">
+    <title>쏘아올린 커밋, Cloud Builder가 볼까? Storage Bucket이 볼까? - 사다리타기</title>
+    <meta name="author" content="zerogyun">
+    <link rel="canonical" href="https://zerogyun.dev/2020/08/13/gcp-storage-github연동/">
+    
+    
+    
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"zerogyun","sameAs":["https://github.com/cxz7720","mailto:admin@zerogyun.dev"],"image":"https://avatars1.githubusercontent.com/u/29659112?s=460&v=4"},"articleBody":"\n\n\nStorage Bucket 내 파일을 업데이트하자App Engine 기반의 API 서버에서 Google Storage Bucket로 정적 파일을 서비스 하는 방향으로 프로젝트 구성을 바꾼 뒤 가장 큰 문제는 파일 업데이트였습니다. 이전에는 Github 레포에 올리기만 하면 알아서 Cloud Builder 가 긁어다가 뚝딱뚝딱 인스턴프를 만들어 줬는데, 새롭게 스토리지로 이전하고 나니 기존 설정은 무쓸모해졌습니다.\n기존의 Cloud builder 의 STEP을 정의해두었던 cloudbuild.yaml을 조금만 응용하면 App Engine 서비스가 아닌, Cloud Storage 를 직접 컨트롤 할 수 있지 않을까 하고 고민하였고 생각보다 쉽게 방법을 찾아냈었습니다.\nrsync 를 이용한 동기화rsync는 파일동기화에 사용되는 유틸리티입니다. GCP에서도 이 rsync를 손쉽게 사용할 수 있도록 준비되어있는데요,Cloud Storage에 접근하는데 사용되는 GSutil과 rsync 를 같이 사용하면 파일을 손쉽게 StorageBucket 에 “동기화” 할 수 있습니다.\ncloudbuild.yaml을 만들어봅시다.제일 중요한 cloudbuild.yaml 파일 입니다.\n12345678910111213141516171819202122232425steps:  # backup previous files to backup storage bucket  - name: gcr.io/cloud-builders/gsutil    args: [        \"-m\", # accelerate upload by processing multiple files        \"rsync\", # using rsync framework        \"-r\",        \"-c\", # avoids reupload unchanged files        \"-d\",        \"gs://SOURCE_BUCKET\", # source directory        \"gs://BACKUP_BUCKET\", # target directory      ]  # copy new files from git source to cloud storage bucket  - name: gcr.io/cloud-builders/gsutil    args:      [        \"-m\",        \"rsync\",        \"-r\",        \"-c\",        \"-d\",        \"./GIT_SOURCE\",        \"gs://SOURCE_BUCKET\",      ]\n\n스크립트는 크게 두 단계로 이루어져 있습니다. 일단 두 스텝 모두 공통적으로 gsutil 이미지를 이용해서 Cloud Storage에 접근할 수 있도록 합니다. gsutil 이미지를 이용해 만들어진 컨테이너에 전달될 args에 우리가 구체적으로 하게 될 일들을 전달해주면 됩니다.\n스크립트의 첫번째 부분은 기존 Bucket 에 들어있던 데이터를 Backup용 Buket 으로 옮겨주는 작업입니다. 백업과정이 필요없다면 이 스텝은 과감하게 지우셔도 됩니다.\n아니 저게 도대체 무슨소리냐이제 무슨소리인지 모르겠는 args 파라미터에 대하여 알아봅시다.\n\n-m : 동시에 다수의 파일을 동기화하여 처리 속도를 향상시킵니다\nrsync : gsutil에게 rsync를 이용해 Storage Bucket 을 동기화 할 것임을 알려줍니다.\n-r : 대상 디렉토리 하위 파일들도 재귀적으로 순회하며 복사하기 위한 옵션입니다. 리눅스에서 cp -r 과 같은 원리입니다.\n-d : 대상 Storage Bucket 의 내용물을 지우고 덮어씌웁니다.\n-c : 바뀐 파일들만 동기화 합니다. 변경점이 없는 파일은 건너뛰어 IO를 최소화합니다.\n\n결국 위 명령어는 원본 Bucket 및 그 하위디렉토리 내용물을 백업 Bucket 으로 동기화 하되, 변경점이 있는 파일들만 옮기고, 목적지의 파일들은 신경쓰지 않을테니 그냥 덮어 씌워라 라는 뜻이 되겠습니다.\n그래서 제일중요한 업데이트는 어떠게 하는데?이제 나머지 두번째 스텝을 봅시다.이전 스텝과 모두 같지만 맨 마지막 두줄만 다릅니다. 바로 Source 와 Target이 다른데요, 업데이트 작업이니 Target 은 그렇다 쳐도 Source 는 GSutil 명령어 형태가 아닌 일반 디렉토리 형식입니다.바로 이 파일은 cloudbuild.yaml 이므로, 결국 Google Cloud Builder 가 받아서 처리할 내용들입니다.\n이 스크립트 파일이 실행될 때는, Git에서 뭔가 훅이 들어와서 변경사항이 있을 때 실행될 것이므로, 현재 Working directory 의 파일을 Source 로 선언하시면 됩니다.\n결국 두번째 스크립트는 깃헙에서 새롭게 받아온 Working Directory의 파일 및 그 하위디렉토리 내용물을 목적지 Bucket 으로 동기화 하되, 변경점이 있는 파일들만 옮기고, 목적지의 파일들은 신경쓰지 않을테니 그냥 덮어 씌워라 라는 뜻이 되겠습니다.\nCloud Builder 트리거 작성트리거 작성은 이전에 작성했던 포스팅인 GCP CloudBuilder 를 이용한 AppEngine 자동빌드에서 잘 정리해 뒀으니 참고하면 됩니다.\n이번 단계에서는 기존 트리거를 그대로 이용하므로 추가적으로 트리거를 직접 수정할 필요는 없습니다.\n커밋을 쏘아올리자스크립트가 잘 돌아가는지 한번 커밋을 쏘아올려 봅시다. Cloud Builder 의 로그를 복사해왔습니다.\n1234567891011121314151617181920212223242526272829starting build \"8186de41-3f57-486c-92b6-*********\"FETCHSOURCEFetching storage object: gs://***************.cloudbuild-source.googleusercontent.com/55f3b2db0ee4220bbb71da3b50ce8c40c31b6fdd-f29bc344-7cf5-4828-855f-ad719c940eb9.tar.gz#***************Copying gs://***************.cloudbuild-source.googleusercontent.com/55f3b2db0ee4220bbb71da3b50ce8c40c31b6fdd-f29bc344-7cf5-4828-855f-ad719c940eb9.tar.gz#***************.../ [0 files][    0.0 B/578.4 KiB]                                                / [1 files][578.4 KiB/578.4 KiB]                                                Operation completed over 1 objects/578.4 KiB.                                    BUILDStarting Step #0Step #0: Already have image (with digest): gcr.io/cloud-builders/gsutilStep #0: Step #0: Building synchronization state...Step #0: Starting synchronization...Finished Step #0Starting Step #1Step #1: Already have image (with digest): gcr.io/cloud-builders/gsutilStep #1: Step #1: Step #1: Building synchronization state...Step #1: Starting synchronization...Step #1: Copying mtime from src to dst for gs://***************/**/**.pdfStep #1: Copying mtime from src to dst for gs://***************/**/**.json...중략...Step #1: Copying mtime from src to dst for gs://***************/**.jsonFinished Step #1PUSHDONE\n\n스크립트에 작성했던대로 두개의 스텝으로 나뉘어 진행되는것을 볼 수 있습니다.첫번째 스텝의 경우 변경점이 없어서 별다른 동기화 작업 없이 백업과정을 SKIP 한것으로 확인되네요.(-c 옵션)\n그 후 두번째 스텝의 경우 새롭게 Fetch 한 소스코드의 내용을 Storage Bucket 으로 복사해 넣는 것을 확인할 수 있었습니다.\n마무리이제 Cloud Storage Bucket 의 내용을 직접 일일히 수동으로 업데이트 하지 않아도, 깃헙에 푸시하는것만으로 자동으로 최신화하여 동일버전으로 유지할 수 있게 되었습니다! \n참고한 글Automated Publishing Cloud build - https://cloud.google.com/community/tutorials/automated-publishing-cloud-build","dateCreated":"2020-08-13T11:28:46+09:00","dateModified":"2020-08-16T15:28:39+09:00","datePublished":"2020-08-13T11:28:46+09:00","description":"GCP Cloud Builder 를 통해 Google Storage Bucket 내에 정적 파일을 자동으로 업데이트 하는 방법에 대하여 알아봅니다.","headline":"쏘아올린 커밋, Cloud Builder가 볼까? Storage Bucket이 볼까?","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"https://zerogyun.dev/2020/08/13/GCP-Storage-Github%EC%97%B0%EB%8F%99/"},"publisher":{"@type":"Organization","name":"zerogyun","sameAs":["https://github.com/cxz7720","mailto:admin@zerogyun.dev"],"image":"https://avatars1.githubusercontent.com/u/29659112?s=460&v=4","logo":{"@type":"ImageObject","url":"https://avatars1.githubusercontent.com/u/29659112?s=460&v=4"}},"url":"https://zerogyun.dev/2020/08/13/GCP-Storage-Github%EC%97%B0%EB%8F%99/","keywords":"GCP, Cloud Builder, Cloud Storage, Github Hook"}</script>
+    <meta name="description" content="GCP Cloud Builder 를 통해 Google Storage Bucket 내에 정적 파일을 자동으로 업데이트 하는 방법에 대하여 알아봅니다.">
+<meta property="og:type" content="blog">
+<meta property="og:title" content="쏘아올린 커밋, Cloud Builder가 볼까? Storage Bucket이 볼까?">
+<meta property="og:url" content="https://zerogyun.dev/2020/08/13/GCP-Storage-Github%EC%97%B0%EB%8F%99/index.html">
+<meta property="og:site_name" content="사다리타기">
+<meta property="og:description" content="GCP Cloud Builder 를 통해 Google Storage Bucket 내에 정적 파일을 자동으로 업데이트 하는 방법에 대하여 알아봅니다.">
+<meta property="og:locale" content="ko_KR">
+<meta property="article:published_time" content="2020-08-13T02:28:46.000Z">
+<meta property="article:modified_time" content="2020-08-16T06:28:39.503Z">
+<meta property="article:author" content="zerogyun">
+<meta property="article:tag" content="GCP">
+<meta property="article:tag" content="Cloud Builder">
+<meta property="article:tag" content="Cloud Storage">
+<meta property="article:tag" content="Github Hook">
+<meta name="twitter:card" content="summary">
+    
+    
+        
+    
+    
+        <meta property="og:image" content="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4">
+    
+    
+    
+    
+    <!--STYLES-->
+    
+<link rel="stylesheet" href="/assets/css/style-fw50wctrjaqsmivs09atdvfvyaod5k7uh4wwyr2q2qwgqd5qcfxd0hix59df.min.css">
+
+    <!--STYLES END-->
+    
+    <script async src="https://www.googletagmanager.com/gtag/js?id=UA-126694602-3"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+
+        gtag('config', 'UA-126694602-3');
+    </script>
+
+
+    
+
+    
+        
+    
+</head>
+
+    <body>
+        <div id="blog">
+            <!-- Define author's picture -->
+
+
+    
+        
+            
+        
+    
+
+<header id="header" data-behavior="5">
+    <i id="btn-open-sidebar" class="fa fa-lg fa-bars"></i>
+    <div class="header-title">
+        <a class="header-title-link" href="/" aria-label>
+            사다리타기
+        </a>
+    </div>
+    
+        
+            <a class="header-right-picture " href="#about" aria-label="링크 열기: /#about">
+        
+        
+            <img class="header-picture" src="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4" alt="저자 이미지">
+        
+        </a>
+    
+</header>
+
+            <!-- Define author's picture -->
+
+
+
+        
+    
+
+<nav id="sidebar" data-behavior="5">
+    <div class="sidebar-container">
+        
+            <div class="sidebar-profile">
+                <a href="/#about" aria-label="저자에 대해 더 알아보기">
+                    <img class="sidebar-profile-picture" src="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4" alt="저자 이미지">
+                </a>
+                <h4 class="sidebar-profile-name">zerogyun</h4>
+                
+                    <h5 class="sidebar-profile-bio"><p>문과생은 코딩을 추구하면 안되는걸까🎉🎉😎</p>
+</h5>
+                
+            </div>
+        
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="/" rel="noopener" title="Home">
+                        <i class="sidebar-button-icon fa fa-home" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Home</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="/all-categories" rel="noopener" title="카테고리">
+                        <i class="sidebar-button-icon fa fa-bookmark" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">카테고리</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="/all-tags" rel="noopener" title="태그">
+                        <i class="sidebar-button-icon fa fa-tags" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">태그</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="https://zerogyun.dev/profile" rel="noopener" title="About">
+                        <i class="sidebar-button-icon fa fa-question" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">About</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="https://github.com/cxz7720" target="_blank" rel="external nofollow noopener noreferrer" title="GitHub">
+                        <i class="sidebar-button-icon fab fa-github" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">GitHub</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="mailto:admin@zerogyun.dev" target="_blank" rel="noopener" title="Mail">
+                        <i class="sidebar-button-icon fa fa-envelope" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Mail</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+    </div>
+</nav>
+
+            
+            <div id="main" data-behavior="5" class="
+                        hasCoverMetaIn
+                        ">
+                
+<article class="post">
+    
+    
+        <div class="post-header main-content-wrap text-left">
+    
+        <h1 class="post-title">
+            쏘아올린 커밋, Cloud Builder가 볼까? Storage Bucket이 볼까?
+        </h1>
+    
+    
+        <div class="post-meta">
+    <time datetime="2020-08-13T11:28:46+09:00">
+	
+		    2020/08/13
+    	
+    </time>
+    
+</div>
+
+    
+</div>
+
+    
+    <div class="post-content markdown">
+        <div class="main-content-wrap">
+            <!-- excerpt -->
+
+
+<h1 id="Storage-Bucket-내-파일을-업데이트하자"><a href="#Storage-Bucket-내-파일을-업데이트하자" class="headerlink" title="Storage Bucket 내 파일을 업데이트하자"></a>Storage Bucket 내 파일을 업데이트하자</h1><p>App Engine 기반의 API 서버에서 Google Storage Bucket로 정적 파일을 서비스 하는 방향으로 프로젝트 구성을 바꾼 뒤 가장 큰 문제는 파일 업데이트였습니다. 이전에는 Github 레포에 올리기만 하면 알아서 Cloud Builder 가 긁어다가 뚝딱뚝딱 인스턴프를 만들어 줬는데, 새롭게 스토리지로 이전하고 나니 기존 설정은 무쓸모해졌습니다.</p>
+<p>기존의 Cloud builder 의 STEP을 정의해두었던 <code>cloudbuild.yaml</code>을 조금만 응용하면 App Engine 서비스가 아닌, Cloud Storage 를 직접 컨트롤 할 수 있지 않을까 하고 고민하였고 생각보다 쉽게 방법을 찾아냈었습니다.</p>
+<h1 id="rsync-를-이용한-동기화"><a href="#rsync-를-이용한-동기화" class="headerlink" title="rsync 를 이용한 동기화"></a>rsync 를 이용한 동기화</h1><p>rsync는 파일동기화에 사용되는 유틸리티입니다. GCP에서도 이 rsync를 손쉽게 사용할 수 있도록 준비되어있는데요,<br>Cloud Storage에 접근하는데 사용되는 GSutil과 rsync 를 같이 사용하면 파일을 손쉽게 StorageBucket 에 “동기화” 할 수 있습니다.</p>
+<h2 id="cloudbuild-yaml을-만들어봅시다"><a href="#cloudbuild-yaml을-만들어봅시다" class="headerlink" title="cloudbuild.yaml을 만들어봅시다."></a>cloudbuild.yaml을 만들어봅시다.</h2><p>제일 중요한 <code>cloudbuild.yaml</code> 파일 입니다.</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">steps:</span></span><br><span class="line">  <span class="comment"># backup previous files to backup storage bucket</span></span><br><span class="line">  <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">gcr.io/cloud-builders/gsutil</span></span><br><span class="line">    <span class="attr">args:</span> <span class="string">[</span></span><br><span class="line">        <span class="string">"-m"</span><span class="string">,</span> <span class="comment"># accelerate upload by processing multiple files</span></span><br><span class="line">        <span class="string">"rsync"</span><span class="string">,</span> <span class="comment"># using rsync framework</span></span><br><span class="line">        <span class="string">"-r"</span><span class="string">,</span></span><br><span class="line">        <span class="string">"-c"</span><span class="string">,</span> <span class="comment"># avoids reupload unchanged files</span></span><br><span class="line">        <span class="string">"-d"</span><span class="string">,</span></span><br><span class="line">        <span class="string">"gs://SOURCE_BUCKET"</span><span class="string">,</span> <span class="comment"># source directory</span></span><br><span class="line">        <span class="string">"gs://BACKUP_BUCKET"</span><span class="string">,</span> <span class="comment"># target directory</span></span><br><span class="line">      <span class="string">]</span></span><br><span class="line"></span><br><span class="line">  <span class="comment"># copy new files from git source to cloud storage bucket</span></span><br><span class="line">  <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">gcr.io/cloud-builders/gsutil</span></span><br><span class="line">    <span class="attr">args:</span></span><br><span class="line">      <span class="string">[</span></span><br><span class="line">        <span class="string">"-m"</span><span class="string">,</span></span><br><span class="line">        <span class="string">"rsync"</span><span class="string">,</span></span><br><span class="line">        <span class="string">"-r"</span><span class="string">,</span></span><br><span class="line">        <span class="string">"-c"</span><span class="string">,</span></span><br><span class="line">        <span class="string">"-d"</span><span class="string">,</span></span><br><span class="line">        <span class="string">"./GIT_SOURCE"</span><span class="string">,</span></span><br><span class="line">        <span class="string">"gs://SOURCE_BUCKET"</span><span class="string">,</span></span><br><span class="line">      <span class="string">]</span></span><br></pre></td></tr></table></figure>
+
+<p>스크립트는 크게 두 단계로 이루어져 있습니다. 일단 두 스텝 모두 공통적으로 gsutil 이미지를 이용해서 Cloud Storage에 접근할 수 있도록 합니다. gsutil 이미지를 이용해 만들어진 컨테이너에 전달될 <code>args</code>에 우리가 구체적으로 하게 될 일들을 전달해주면 됩니다.</p>
+<p>스크립트의 첫번째 부분은 기존 Bucket 에 들어있던 데이터를 Backup용 Buket 으로 옮겨주는 작업입니다. 백업과정이 필요없다면 이 스텝은 과감하게 지우셔도 됩니다.</p>
+<h2 id="아니-저게-도대체-무슨소리냐"><a href="#아니-저게-도대체-무슨소리냐" class="headerlink" title="아니 저게 도대체 무슨소리냐"></a>아니 저게 도대체 무슨소리냐</h2><p>이제 무슨소리인지 모르겠는 <code>args</code> 파라미터에 대하여 알아봅시다.</p>
+<ul>
+<li><code>-m</code> : 동시에 다수의 파일을 동기화하여 처리 속도를 향상시킵니다</li>
+<li><code>rsync</code> : gsutil에게 rsync를 이용해 Storage Bucket 을 동기화 할 것임을 알려줍니다.</li>
+<li><code>-r</code> : 대상 디렉토리 하위 파일들도 재귀적으로 순회하며 복사하기 위한 옵션입니다. 리눅스에서 <code>cp -r</code> 과 같은 원리입니다.</li>
+<li><code>-d</code> : 대상 Storage Bucket 의 내용물을 지우고 덮어씌웁니다.</li>
+<li><code>-c</code> : 바뀐 파일들만 동기화 합니다. 변경점이 없는 파일은 건너뛰어 IO를 최소화합니다.</li>
+</ul>
+<p>결국 위 명령어는 <strong>원본 Bucket 및 그 하위디렉토리 내용물을 백업 Bucket 으로 동기화 하되, 변경점이 있는 파일들만 옮기고, 목적지의 파일들은 신경쓰지 않을테니 그냥 덮어 씌워라</strong> 라는 뜻이 되겠습니다.</p>
+<h2 id="그래서-제일중요한-업데이트는-어떠게-하는데"><a href="#그래서-제일중요한-업데이트는-어떠게-하는데" class="headerlink" title="그래서 제일중요한 업데이트는 어떠게 하는데?"></a>그래서 제일중요한 업데이트는 어떠게 하는데?</h2><p>이제 나머지 두번째 스텝을 봅시다.<br>이전 스텝과 모두 같지만 맨 마지막 두줄만 다릅니다. 바로 Source 와 Target이 다른데요, 업데이트 작업이니 Target 은 그렇다 쳐도 Source 는 GSutil 명령어 형태가 아닌 일반 디렉토리 형식입니다.<br>바로 이 파일은 <code>cloudbuild.yaml</code> 이므로, 결국 Google Cloud Builder 가 받아서 처리할 내용들입니다.</p>
+<p>이 스크립트 파일이 실행될 때는, Git에서 뭔가 훅이 들어와서 변경사항이 있을 때 실행될 것이므로, 현재 Working directory 의 파일을 Source 로 선언하시면 됩니다.</p>
+<p>결국 두번째 스크립트는 <strong>깃헙에서 새롭게 받아온 Working Directory의 파일 및 그 하위디렉토리 내용물을 목적지 Bucket 으로 동기화 하되, 변경점이 있는 파일들만 옮기고, 목적지의 파일들은 신경쓰지 않을테니 그냥 덮어 씌워라</strong> 라는 뜻이 되겠습니다.</p>
+<h1 id="Cloud-Builder-트리거-작성"><a href="#Cloud-Builder-트리거-작성" class="headerlink" title="Cloud Builder 트리거 작성"></a>Cloud Builder 트리거 작성</h1><p>트리거 작성은 이전에 작성했던 포스팅인 <a href="https://zerogyun.dev/2020/01/29/GAE%20%EC%9E%90%EB%8F%99%EB%B9%8C%EB%93%9C/">GCP CloudBuilder 를 이용한 AppEngine 자동빌드</a>에서 잘 정리해 뒀으니 참고하면 됩니다.</p>
+<p>이번 단계에서는 기존 트리거를 그대로 이용하므로 추가적으로 트리거를 직접 수정할 필요는 없습니다.</p>
+<h1 id="커밋을-쏘아올리자"><a href="#커밋을-쏘아올리자" class="headerlink" title="커밋을 쏘아올리자"></a>커밋을 쏘아올리자</h1><p>스크립트가 잘 돌아가는지 한번 커밋을 쏘아올려 봅시다. Cloud Builder 의 로그를 복사해왔습니다.</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line">starting build <span class="string">"8186de41-3f57-486c-92b6-*********"</span></span><br><span class="line"></span><br><span class="line">FETCHSOURCE</span><br><span class="line">Fetching storage object: gs://***************.cloudbuild-source.googleusercontent.com/55f3b2db0ee4220bbb71da3b50ce8c40c31b6fdd-f29bc344-7cf5-4828-855f-ad719c940eb9.tar.gz<span class="comment">#***************</span></span><br><span class="line">Copying gs://***************.cloudbuild-source.googleusercontent.com/55f3b2db0ee4220bbb71da3b50ce8c40c31b6fdd-f29bc344-7cf5-4828-855f-ad719c940eb9.tar.gz<span class="comment">#***************...</span></span><br><span class="line">/ [0 files][    0.0 B/578.4 KiB]                                                </span><br><span class="line">/ [1 files][578.4 KiB/578.4 KiB]                                                </span><br><span class="line">Operation completed over 1 objects/578.4 KiB.                                    </span><br><span class="line">BUILD</span><br><span class="line">Starting Step <span class="comment">#0</span></span><br><span class="line">Step <span class="comment">#0: Already have image (with digest): gcr.io/cloud-builders/gsutil</span></span><br><span class="line"></span><br><span class="line">Step <span class="comment">#0: </span></span><br><span class="line">Step <span class="comment">#0: Building synchronization state...</span></span><br><span class="line">Step <span class="comment">#0: Starting synchronization...</span></span><br><span class="line">Finished Step <span class="comment">#0</span></span><br><span class="line">Starting Step <span class="comment">#1</span></span><br><span class="line">Step <span class="comment">#1: Already have image (with digest): gcr.io/cloud-builders/gsutil</span></span><br><span class="line">Step <span class="comment">#1: </span></span><br><span class="line">Step <span class="comment">#1: </span></span><br><span class="line">Step <span class="comment">#1: Building synchronization state...</span></span><br><span class="line">Step <span class="comment">#1: Starting synchronization...</span></span><br><span class="line">Step <span class="comment">#1: Copying mtime from src to dst for gs://***************/**/**.pdf</span></span><br><span class="line">Step <span class="comment">#1: Copying mtime from src to dst for gs://***************/**/**.json</span></span><br><span class="line">...중략...</span><br><span class="line">Step <span class="comment">#1: Copying mtime from src to dst for gs://***************/**.json</span></span><br><span class="line">Finished Step <span class="comment">#1</span></span><br><span class="line">PUSH</span><br><span class="line">DONE</span><br></pre></td></tr></table></figure>
+
+<p>스크립트에 작성했던대로 두개의 스텝으로 나뉘어 진행되는것을 볼 수 있습니다.<br>첫번째 스텝의 경우 변경점이 없어서 별다른 동기화 작업 없이 백업과정을 SKIP 한것으로 확인되네요.(<code>-c</code> 옵션)</p>
+<p>그 후 두번째 스텝의 경우 새롭게 Fetch 한 소스코드의 내용을 Storage Bucket 으로 복사해 넣는 것을 확인할 수 있었습니다.</p>
+<h2 id="마무리"><a href="#마무리" class="headerlink" title="마무리"></a>마무리</h2><p>이제 Cloud Storage Bucket 의 내용을 직접 일일히 수동으로 업데이트 하지 않아도, 깃헙에 푸시하는것만으로 자동으로 최신화하여 동일버전으로 유지할 수 있게 되었습니다! </p>
+<h4 id="참고한-글"><a href="#참고한-글" class="headerlink" title="참고한 글"></a>참고한 글</h4><p>Automated Publishing Cloud build - <a href="https://cloud.google.com/community/tutorials/automated-publishing-cloud-build" target="_blank" rel="external nofollow noopener noreferrer">https://cloud.google.com/community/tutorials/automated-publishing-cloud-build</a></p>
+            
+
+
+        </div>
+    </div>
+    <div id="post-footer" class="post-footer main-content-wrap">
+        
+            <div class="post-footer-tags">
+                <span class="text-color-light text-small">태그</span><br>
+                
+    <a class="tag tag--primary tag--small t-link" href="/tags/Cloud-Builder/" rel="tag">Cloud Builder</a> <a class="tag tag--primary tag--small t-link" href="/tags/Cloud-Storage/" rel="tag">Cloud Storage</a> <a class="tag tag--primary tag--small t-link" href="/tags/GCP/" rel="tag">GCP</a> <a class="tag tag--primary tag--small t-link" href="/tags/Github-Hook/" rel="tag">Github Hook</a>
+
+            </div>
+        
+
+        <!-- 커스터마이징 해본 관련 글 영역-->
+        
+        
+        <div class="post-footer-tags">
+            <span class="text-color-light text-small">관련 글</span><br>
+            <ul class="popular-posts"><li class="popular-posts-item"><div class="popular-posts-title"><h3><a href="/2020/01/29/GAE 자동빌드/" title="Google App Engine에 자동으로 배포하기" rel="bookmark">Google App Engine에 자동으로 배포하기</a></h3></div></li><li class="popular-posts-item"><div class="popular-posts-title"><h3><a href="/2020/07/26/자고일어났더니 어느날 GCP 비용이 10000% 늘어나 버렸다/" title="자고일어났더니 어느날 GCP 비용이 10000% 늘어나 버렸다" rel="bookmark">자고일어났더니 어느날 GCP 비용이 10000% 늘어나 버렸다</a></h3></div></li></ul>
+        </div>
+        
+        <!-- 끝 -->
+        
+        
+            <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    <a class="post-action-btn btn btn--disabled" aria-hidden="true">
+                        
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">이전</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a class="post-action-btn btn btn--default tooltip--top" href="/2020/07/26/%EC%9E%90%EA%B3%A0%EC%9D%BC%EC%96%B4%EB%82%AC%EB%8D%94%EB%8B%88%20%EC%96%B4%EB%8A%90%EB%82%A0%20GCP%20%EB%B9%84%EC%9A%A9%EC%9D%B4%2010000%25%20%EB%8A%98%EC%96%B4%EB%82%98%20%EB%B2%84%EB%A0%B8%EB%8B%A4/" data-tooltip="자고일어났더니 어느날 GCP 비용이 10000% 늘어나 버렸다" aria-label="다음: 자고일어났더니 어느날 GCP 비용이 10000% 늘어나 버렸다">
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">다음</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a class="post-action-btn btn btn--default btn-open-shareoptions" href="#btn-open-shareoptions" aria-label="이 포스트 공유하기">
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://www.facebook.com/sharer/sharer.php?u=https://zerogyun.dev/2020/08/13/GCP-Storage-Github%EC%97%B0%EB%8F%99/" title="Facebook에 공유하기" aria-label="Facebook에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://twitter.com/intent/tweet?text=https://zerogyun.dev/2020/08/13/GCP-Storage-Github%EC%97%B0%EB%8F%99/" title="Twitter에 공유하기" aria-label="Twitter에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://plus.google.com/share?url=https://zerogyun.dev/2020/08/13/GCP-Storage-Github%EC%97%B0%EB%8F%99/" title="Google+에 공유하기" aria-label="Google+에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+                <li class="post-action">
+                    <a class="post-action-btn btn btn--default" href="#disqus_thread" aria-label="댓글을 남겨주세요">
+                        <i class="fa fa-comment"></i>
+                    </a>
+                </li>
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="맨 위로">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+        
+        
+            
+                <div id="disqus_thread">
+    <noscript>Please enable JavaScript to view the <a href="//disqus.com/?ref_noscript" target="_blank" rel="noopener">comments powered by Disqus.</a></noscript>
+</div>
+            
+        
+    </div>
+</article>
+
+
+
+                <footer id="footer" class="main-content-wrap">
+    <span class="copyrights">
+        Copyrights &copy; 2020 zerogyun. All Rights Reserved.
+    </span>
+</footer>
+
+            </div>
+            
+                <div id="bottom-bar" class="post-bottom-bar" data-behavior="5">
+                    <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    <a class="post-action-btn btn btn--disabled" aria-hidden="true">
+                        
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">이전</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a class="post-action-btn btn btn--default tooltip--top" href="/2020/07/26/%EC%9E%90%EA%B3%A0%EC%9D%BC%EC%96%B4%EB%82%AC%EB%8D%94%EB%8B%88%20%EC%96%B4%EB%8A%90%EB%82%A0%20GCP%20%EB%B9%84%EC%9A%A9%EC%9D%B4%2010000%25%20%EB%8A%98%EC%96%B4%EB%82%98%20%EB%B2%84%EB%A0%B8%EB%8B%A4/" data-tooltip="자고일어났더니 어느날 GCP 비용이 10000% 늘어나 버렸다" aria-label="다음: 자고일어났더니 어느날 GCP 비용이 10000% 늘어나 버렸다">
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">다음</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a class="post-action-btn btn btn--default btn-open-shareoptions" href="#btn-open-shareoptions" aria-label="이 포스트 공유하기">
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://www.facebook.com/sharer/sharer.php?u=https://zerogyun.dev/2020/08/13/GCP-Storage-Github%EC%97%B0%EB%8F%99/" title="Facebook에 공유하기" aria-label="Facebook에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://twitter.com/intent/tweet?text=https://zerogyun.dev/2020/08/13/GCP-Storage-Github%EC%97%B0%EB%8F%99/" title="Twitter에 공유하기" aria-label="Twitter에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://plus.google.com/share?url=https://zerogyun.dev/2020/08/13/GCP-Storage-Github%EC%97%B0%EB%8F%99/" title="Google+에 공유하기" aria-label="Google+에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+                <li class="post-action">
+                    <a class="post-action-btn btn btn--default" href="#disqus_thread" aria-label="댓글을 남겨주세요">
+                        <i class="fa fa-comment"></i>
+                    </a>
+                </li>
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="맨 위로">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+                </div>
+                
+    <div id="share-options-bar" class="share-options-bar" data-behavior="5">
+        <i id="btn-close-shareoptions" class="fa fa-times"></i>
+        <ul class="share-options">
+            
+                
+                
+                <li class="share-option">
+                    <a class="share-option-btn" target="_blank" href="https://www.facebook.com/sharer/sharer.php?u=https://zerogyun.dev/2020/08/13/GCP-Storage-Github%EC%97%B0%EB%8F%99/" aria-label="Facebook에 공유하기" rel="external nofollow noopener noreferrer">
+                        <i class="fab fa-facebook" aria-hidden="true"></i><span>Facebook에 공유하기</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a class="share-option-btn" target="_blank" href="https://twitter.com/intent/tweet?text=https://zerogyun.dev/2020/08/13/GCP-Storage-Github%EC%97%B0%EB%8F%99/" aria-label="Twitter에 공유하기" rel="external nofollow noopener noreferrer">
+                        <i class="fab fa-twitter" aria-hidden="true"></i><span>Twitter에 공유하기</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a class="share-option-btn" target="_blank" href="https://plus.google.com/share?url=https://zerogyun.dev/2020/08/13/GCP-Storage-Github%EC%97%B0%EB%8F%99/" aria-label="Google+에 공유하기" rel="external nofollow noopener noreferrer">
+                        <i class="fab fa-google-plus" aria-hidden="true"></i><span>Google+에 공유하기</span>
+                    </a>
+                </li>
+            
+        </ul>
+    </div>
+
+
+            
+        </div>
+        
+
+
+    
+        
+    
+
+<div id="about">
+    <div id="about-card">
+        <div id="about-btn-close">
+            <i class="fa fa-times"></i>
+        </div>
+        
+            <img id="about-card-picture" src="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4" alt="저자 이미지">
+        
+            <h4 id="about-card-name">zerogyun</h4>
+        
+            <div id="about-card-bio"><p>문과생은 코딩을 추구하면 안되는걸까🎉🎉😎</p>
+</div>
+        
+        
+            <div id="about-card-job">
+                <i class="fa fa-briefcase"></i>
+                <br>
+                <p>Student</p>
+
+            </div>
+        
+        
+            <div id="about-card-location">
+                <i class="fa fa-map-marker-alt"></i>
+                <br>
+                Seoul, South Korea
+            </div>
+        
+    </div>
+</div>
+
+        
+        
+<div id="cover" style="background-image:url('https://user-images.githubusercontent.com/29659112/76057866-1e009100-5fbe-11ea-84fe-00462e469e66.png');"></div>
+        <!--SCRIPTS-->
+
+<script src="/assets/js/script-x1vdftk4cl7qzqhhk5azkrwmupjg7afvw8n3kmjskpd5qfbsjzyc7ihkom7i.min.js"></script>
+
+<!--SCRIPTS END-->
+
+
+    
+        <script>
+          var disqus_config = function() {
+            this.page.url = 'https://zerogyun.dev/2020/08/13/GCP-Storage-Github%EC%97%B0%EB%8F%99/';
+              
+            this.page.identifier = '2020/08/13/GCP-Storage-Github연동/';
+              
+          };
+          (function() {
+            var d = document, s = d.createElement('script');
+            var disqus_shortname = 'cxz7720-github-io-1';
+            s.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+
+            s.setAttribute('data-timestamp', +new Date());
+            (d.head || d.body).appendChild(s);
+          })();
+        </script>
+    
+
+
+
+
+    </body>
+</html>
