@@ -1,0 +1,560 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+    
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="generator" content="사다리타기">
+    <title>Xcode 12.5에서 React Native 빌드에러 해결하기 - 사다리타기</title>
+    <meta name="author" content="zerogyun">
+    <link rel="canonical" href="https://zerogyun.dev/2021/05/06/xcode-12-5에서-react-native-빌드에러-해결하기/">
+    
+    
+    
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"zerogyun","sameAs":["https://github.com/cxz7720","mailto:admin@zerogyun.dev"],"image":"https://avatars1.githubusercontent.com/u/29659112?s=460&v=4"},"articleBody":"\n\n⚾️ Xcode 12.5 가 쏘아올린 작은(?) 공Mac OS 11.3.1(20E241) 업데이트와 함께 Xcode 12.5 와 Xcode Command Line Tools 버전도 같이 배포되었습니다. 하지만, Swift 컴파일러의 내부적인 설정이 바뀌었는지 기존의 모든 React Native 프로젝트들이 빌드가 실패하는 현상이 발생하기 시작했습니다.\n사실 이 문제는 Xcode 12.5 Beta3가 나왔을 때 부터 이슈가 열려있었는데요, 딱히 뽀족한 해결책을 찾지 못하고 시간만 흐르다가, 결국 정식 릴리즈 이후에 뻥 터져버린 케이스가 되겠습니다.\n😵‍💫 New RN project will not build on Xcode 12.5 Beta 3/#31179\n\n🤦🏼‍♂️ 어떤 문제가 생기나요?1. Flipper 관련 빌드에러\n일단 가장 큰 원인은 Flipper 때문에 발생합니다.\nFlipper 는 Facebook 에서 개발한 디버딩 도구인데요, 매우 Native 코드에 종속적인 기능이라 빌드과정에서도 상당히 오랜 시간을 잡아먹는 녀석입니다. 기존의 Creact-React-Native 를 이용해 만들어진 대부분의 프로젝트들이 사용하는 Flipper 를 빌드하는 과정에서 새롭게 바뀐 Swift 컴파일러에서 빌드에러를 유발하는것이 이번 이슈의 가장 큰 원인입니다.\n정확히는 Flipper 소스코드 중 atomic_wait_until is unavailable 를 이용하는 부분에서 에러가 발생합니다.\n👻 Flipper 레포 이슈\n2. FBSDK 빌드에러Flipper 라는 산을 넘었어도, 혹시 빌드에 실패하셨나요?제 경우에는 Facebook SDK 에서 빌드가 실패했습니다. fbsdk-share-kit 및 fbsdk-loginkit 관련해서 빌드 에러가 발생하였습니다.\n3. Swift Compiler 오류\n4. 기타 잡다한 모듈들 ld 에러(Linking error)으악! 컴파일러의 망령이 내 퇴근을 막는다!! 👻👻👻\n🍹 어떻게 해결하나요?1. Flipper 버전업🍒 Xcode 12.5 troubleshooting guide (RN 0.62/0.63/0.64)/ #31480\n다행히 Xcode 12.5 릴리즈 일주일만에 해결책이 나왔습니다.\n잠깐! 현재 프로젝트에서 사용중인 React Native 의 버전을 꼭 확인하고, 해당 버전에 맞는 솔루션을 사용하세요.\nRN 0.62Podfile의 useFlipper! 항목에 다음 내용을 추가합니다.use_flipper!(&#39;Flipper&#39; =&gt; &#39;0.75.1&#39;, &#39;Flipper-Folly&#39; =&gt; &#39;2.5.3&#39;, &#39;Flipper-RSocket&#39; =&gt; &#39;1.3.1&#39;)\n그리고, 프로젝트 루트의 package.json 에서 React Native 버전을 올려주세요&quot;react-native&quot;: &quot;0.62.3&quot;\nRN 0.63Podfile의 useFlipper! 항목에 아래 내용만 추가해주면 됩니다.use_flipper!(&#39;Flipper&#39; =&gt; &#39;0.75.1&#39;, &#39;Flipper-Folly&#39; =&gt; &#39;2.5.3&#39;, &#39;Flipper-RSocket&#39; =&gt; &#39;1.3.1&#39;)\n필요에 따라서 기존에 남은 Podfile 관련 캐시 및 RN캐시, Pods 폴더를 모두 지우고 다시 인스톨 하는 등의 과정이 필요할 수도 있습니다.\nRN 0.64Podfile.lock 에 정의되어있는 Flipper 버전이 0.75보다 높은지, Flipper-polly 버전이 2.5.3보다 높은지 확인합니다. 만약 그렇지 않다면 Podfile 에 다음 내용을 추가해주세요.\nuse_flipper!(&#39;Flipper&#39; =&gt; &#39;0.75.1&#39;, &#39;Flipper-Folly&#39; =&gt; &#39;2.5.3&#39;, &#39;Flipper-RSocket&#39; =&gt; &#39;1.3.1&#39;)\n그리고 프로젝트 루트에 있는 package.json에서 RN 버전을 다음과 같이 올려주세요.&quot;react-native&quot;: &quot;0.64.1&quot;\n2. React-Native-FBSDK-next 로 교체react-native-fbsdk 패키지를 열어보면, 해당 패키지에서 사용하는 네이티브 코어 sdk 버전이 7.0 버전입니다. 현재 FBSDK 최신버전은 9.2 까지 올라와 있는 상황입니다.\n안타깝게도 현재 Facebook 측에서는 React Native SDK 에 대한 지원을 중단함을 바로 얼마 전에 선언했습니다.\n🧊 React Native Facebook SDK Git🧊 Facebook Blog Post\n대신 커뮤니티에서 react-native-fbsdk-next 라는 모듈을 이어받아서 계속해가고 있습니다. 이 모듈을 이용하면 최신 SDK 인 9.x 버전을 이용할 수 있습니다.\n모든 JS/TS 메소드는 동일합니다. 패키지만 교체하고, pod install 해주면 기존 소스코드 변경없이 이용 가능합니다.\n3. 시스템 껐다가 켜기놀랍게도, 이게 왜 되는지 모르겠지만, Swift Compiler 에러는 이걸로 해결이 된다고 합니다.\n모든 터미널을 끄고, 에뮬레이터를 끄고, Xcode 도 끄고, 마지막으로 시스템도 껐다가 다시 켜줍니다.\n아이고 세상에나..\n🍭 Build Fail on iOS\n4. LD 에러해결Xcode 12 버전에 들어오면서 발생한 이슈입니다.일부 패키지에서 React pod을 참조하는것이 원인입니다.\n🤷🏼 Build failed on XCode 12 beta4\nnode_modules 폴더를 열어서 해당 패키지를 찾아들어간 뒤, *.podspec 확장자를 가진 파일을 열어줍니다.\n그 중, s.dependency 라인에 있는 React 디펜던시를 React-Core 로 수정해줍니다.\n예를들어서, 아래는 제가 사용중인 lottie-react-native 모듈의 Podspec 파일입니다. 해당 패키지는 최신버전인 4.x버전에서 이미 패치가 되었습니다만, 제가 사용중인 버전은 3.5.x 버전이라 패치가 수동으로 필요합니다.\n123456789101112131415161718192021require 'json'package = JSON.parse(File.read(File.join(__dir__, 'package.json')))Pod::Spec.new do |s|  s.name         = \"lottie-react-native\"  s.version      = package['version']  s.summary      = \"Lottie component for React Native (iOS and Android)\"  s.authors      = &#123; \"intelligibabble\" =&gt; \"leland.m.richardson@gmail.com\" &#125;  s.homepage     = \"https://github.com/airbnb/lottie-react-native#readme\"  s.license      = package['license']  s.platform     = :ios, \"9.0\"  s.source       = &#123; :git =&gt; \"https://github.com/react-community/lottie-react-native.git\", :tag =&gt; \"v#&#123;s.version&#125;\" &#125;  s.source_files  = \"src/ios/**/*.&#123;h,m,swift&#125;\"  s.swift_version = \"5.0\"  - s.dependency 'React'        &lt;-- 이 라인을  + s.dependency 'React-Core'   &lt;-- 이렇게 고쳐주세요  s.dependency 'lottie-ios', '~&gt; 3.1.8'end\n저명한 패키지들은 진작에 패치가 이루어 졌습니다만, 개발자가 손을 때었거나, 활발하게 사용되지 않는 패키지들은 새 버전 릴리즈까지 기다릴 수 없으니 patch-package 를 이용하여 덕테이프를 발라줍시다.\n🗝 이도저도 안된다면…위 방법으로도 해결이 안되거나 할 수 없는 상황이라면 Xcode 를 다운그레이드 하는 방법만이 남았습니다.\nApple Download Center 에 개발자 계정으로 로그인 한 뒤, Xcode 14.4.xip 파일을 다운로드 해줍니다.\n그 후, 압축 유틸리티를 이용해 풀어준 뒤, Applications 폴더에 던져주면 해결!\n번외 - Xcode 동시에 돌려쓰기그러나, 언제까지나 오래된 에디터 및 컴파일러로 개발 할 수는 없습니다.상황에 맞게 디버깅하고, 새 도구를 테스트 해야하는데, 몇십기가나 되는 Xcode를 매번 지웠다 다시 까는것도 번거로운 일입니다.\n다행히도, 바로 xcode-select 도구를 이용하면 Xcode 를 버전별로 여러개 설치해서 사용할 수 있습니다.\n먼저 이전에 다운로드해둔 Xcode.xip파일의 압출을 풀어서 나온 app 파일의 이름을 바꿔줍니다. 제 경우에는 Xcode-12.4.app 로 했습니다.\n그 뒤, 똑같이 Applications 폴더에 던져줍니다.\n마지막으로 터미널을 열어서 아래 명령어를 실행시켜줍니다.sudo xcode-select -s /Applications/[바꾼 Xcode 이름].app/Contents/Developer\n현재 활성화된 버전을 확인하려면xcode-select -p로 확인할 수 있습니다.\n또는, RN 빌드에 사용되는 명령어인 xcodebuild 의 버전으로도 확인할 수 있습니다.xcodebuild -v","dateCreated":"2021-05-06T03:09:11+09:00","dateModified":"2021-05-06T04:24:53+09:00","datePublished":"2021-05-06T03:09:11+09:00","description":"Xcode 12.5 로 업데이트 되면서 발생한 React Native 빌드 에러를 해결하는 방법에 대해서 알아봅니다.","headline":"Xcode 12.5에서 React Native 빌드에러 해결하기","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"https://zerogyun.dev/2021/05/06/Xcode-12-5%EC%97%90%EC%84%9C-React-Native-%EB%B9%8C%EB%93%9C%EC%97%90%EB%9F%AC-%ED%95%B4%EA%B2%B0%ED%95%98%EA%B8%B0/"},"publisher":{"@type":"Organization","name":"zerogyun","sameAs":["https://github.com/cxz7720","mailto:admin@zerogyun.dev"],"image":"https://avatars1.githubusercontent.com/u/29659112?s=460&v=4","logo":{"@type":"ImageObject","url":"https://avatars1.githubusercontent.com/u/29659112?s=460&v=4"}},"url":"https://zerogyun.dev/2021/05/06/Xcode-12-5%EC%97%90%EC%84%9C-React-Native-%EB%B9%8C%EB%93%9C%EC%97%90%EB%9F%AC-%ED%95%B4%EA%B2%B0%ED%95%98%EA%B8%B0/","keywords":"React Native, Xcode, iOS"}</script>
+    <meta name="description" content="Xcode 12.5 로 업데이트 되면서 발생한 React Native 빌드 에러를 해결하는 방법에 대해서 알아봅니다.">
+<meta property="og:type" content="blog">
+<meta property="og:title" content="Xcode 12.5에서 React Native 빌드에러 해결하기">
+<meta property="og:url" content="https://zerogyun.dev/2021/05/06/Xcode-12-5%EC%97%90%EC%84%9C-React-Native-%EB%B9%8C%EB%93%9C%EC%97%90%EB%9F%AC-%ED%95%B4%EA%B2%B0%ED%95%98%EA%B8%B0/index.html">
+<meta property="og:site_name" content="사다리타기">
+<meta property="og:description" content="Xcode 12.5 로 업데이트 되면서 발생한 React Native 빌드 에러를 해결하는 방법에 대해서 알아봅니다.">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:image" content="https://user-images.githubusercontent.com/29659112/117192573-dc1ae700-ae1c-11eb-8894-29613f57d262.png">
+<meta property="og:image" content="https://user-images.githubusercontent.com/29659112/117192358-98c07880-ae1c-11eb-8051-ddfebbfdac8e.png">
+<meta property="og:image" content="https://user-images.githubusercontent.com/29659112/117195644-7af51280-ae20-11eb-92f4-2514a791f984.png">
+<meta property="og:image" content="https://user-images.githubusercontent.com/29659112/117195705-8fd1a600-ae20-11eb-9999-6401f41c5e34.png">
+<meta property="article:published_time" content="2021-05-05T18:09:11.000Z">
+<meta property="article:modified_time" content="2021-05-05T19:24:53.672Z">
+<meta property="article:author" content="zerogyun">
+<meta property="article:tag" content="React Native">
+<meta property="article:tag" content="Xcode">
+<meta property="article:tag" content="iOS">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://user-images.githubusercontent.com/29659112/117192573-dc1ae700-ae1c-11eb-8894-29613f57d262.png">
+    
+    
+        
+    
+    
+        <meta property="og:image" content="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4">
+    
+    
+    
+    
+    <!--STYLES-->
+    
+<link rel="stylesheet" href="/assets/css/style-pcephn7zaa12ensqtfq0wjhuk4dl24bscwcazacfcrygpanqx9xh5di20s6a.min.css">
+
+    <!--STYLES END-->
+    
+    <script async src="https://www.googletagmanager.com/gtag/js?id=UA-126694602-3"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+
+        gtag('config', 'UA-126694602-3');
+    </script>
+
+
+    
+
+    
+        
+    
+</head>
+
+    <body>
+        <div id="blog">
+            <!-- Define author's picture -->
+
+
+    
+        
+            
+        
+    
+
+<header id="header" data-behavior="2">
+    <i id="btn-open-sidebar" class="fa fa-lg fa-bars"></i>
+    <div class="header-title">
+        <a class="header-title-link" href="/" aria-label>
+            사다리타기
+        </a>
+    </div>
+    
+        
+            <a class="header-right-picture " href="#about" aria-label="링크 열기: /#about">
+        
+        
+            <img class="header-picture" src="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4" alt="저자 이미지">
+        
+        </a>
+    
+</header>
+
+            <!-- Define author's picture -->
+
+
+
+        
+    
+
+<nav id="sidebar" data-behavior="2">
+    <div class="sidebar-container">
+        
+            <div class="sidebar-profile">
+                <a href="/#about" aria-label="저자에 대해 더 알아보기">
+                    <img class="sidebar-profile-picture" src="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4" alt="저자 이미지">
+                </a>
+                <h4 class="sidebar-profile-name">zerogyun</h4>
+                
+                    <h5 class="sidebar-profile-bio"><p>매일매일이 새로워!!</p>
+</h5>
+                
+            </div>
+        
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="/" rel="noopener" title="Home">
+                        <i class="sidebar-button-icon fa fa-home" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Home</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="/all-categories" rel="noopener" title="카테고리">
+                        <i class="sidebar-button-icon fa fa-bookmark" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">카테고리</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="/all-tags" rel="noopener" title="태그">
+                        <i class="sidebar-button-icon fa fa-tags" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">태그</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="https://zerogyun.dev/portfolio" rel="noopener" title="About">
+                        <i class="sidebar-button-icon fa fa-question" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">About</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="https://github.com/cxz7720" target="_blank" rel="external nofollow noopener noreferrer" title="GitHub">
+                        <i class="sidebar-button-icon fab fa-github" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">GitHub</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a class="sidebar-button-link " href="mailto:admin@zerogyun.dev" target="_blank" rel="noopener" title="Mail">
+                        <i class="sidebar-button-icon fa fa-envelope" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">Mail</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+    </div>
+</nav>
+
+            
+            <div id="main" data-behavior="2" class="
+                        hasCoverMetaIn
+                        ">
+                
+<article class="post">
+    
+    
+        <div class="post-header main-content-wrap text-left">
+    
+        <h1 class="post-title">
+            Xcode 12.5에서 React Native 빌드에러 해결하기
+        </h1>
+    
+    
+        <div class="post-meta">
+    <time datetime="2021-05-06T03:09:11+09:00">
+	
+		    2021/05/06
+    	
+    </time>
+    
+        <span>카테고리 </span>
+        
+    <a class="category-link" href="/categories/React-Native/">React Native</a>
+
+
+    
+</div>
+
+    
+</div>
+
+    
+    <div class="post-content markdown">
+        <div class="main-content-wrap">
+            <!-- excerpt -->
+
+<h1 id="⚾️-Xcode-12-5-가-쏘아올린-작은-공"><a href="#⚾️-Xcode-12-5-가-쏘아올린-작은-공" class="headerlink" title="⚾️ Xcode 12.5 가 쏘아올린 작은(?) 공"></a>⚾️ Xcode 12.5 가 쏘아올린 작은(?) 공</h1><p>Mac OS 11.3.1(20E241) 업데이트와 함께 Xcode 12.5 와 Xcode Command Line Tools 버전도 같이 배포되었습니다. 하지만, Swift 컴파일러의 내부적인 설정이 바뀌었는지 기존의 모든 React Native 프로젝트들이 빌드가 실패하는 현상이 발생하기 시작했습니다.</p>
+<p>사실 이 문제는 Xcode 12.5 Beta3가 나왔을 때 부터 이슈가 열려있었는데요, 딱히 뽀족한 해결책을 찾지 못하고 시간만 흐르다가, 결국 정식 릴리즈 이후에 뻥 터져버린 케이스가 되겠습니다.</p>
+<p><a href="https://github.com/facebook/react-native/issues/31179" target="_blank" rel="external nofollow noopener noreferrer">😵‍💫 New RN project will not build on Xcode 12.5 Beta 3/#31179
+</a></p>
+<h1 id="🤦🏼‍♂️-어떤-문제가-생기나요"><a href="#🤦🏼‍♂️-어떤-문제가-생기나요" class="headerlink" title="🤦🏼‍♂️ 어떤 문제가 생기나요?"></a>🤦🏼‍♂️ 어떤 문제가 생기나요?</h1><h2 id="1-Flipper-관련-빌드에러"><a href="#1-Flipper-관련-빌드에러" class="headerlink" title="1. Flipper 관련 빌드에러"></a>1. Flipper 관련 빌드에러</h2><p><img src="https://user-images.githubusercontent.com/29659112/117192573-dc1ae700-ae1c-11eb-8894-29613f57d262.png" alt="image"></p>
+<p>일단 가장 큰 원인은 <strong>Flipper</strong> 때문에 발생합니다.</p>
+<p>Flipper 는 Facebook 에서 개발한 디버딩 도구인데요, 매우 Native 코드에 종속적인 기능이라 빌드과정에서도 상당히 오랜 시간을 잡아먹는 녀석입니다. 기존의 Creact-React-Native 를 이용해 만들어진 대부분의 프로젝트들이 사용하는 Flipper 를 빌드하는 과정에서 새롭게 바뀐 Swift 컴파일러에서 빌드에러를 유발하는것이 이번 이슈의 가장 큰 원인입니다.</p>
+<p>정확히는 Flipper 소스코드 중 <code>atomic_wait_until is unavailable</code> 를 이용하는 부분에서 에러가 발생합니다.</p>
+<p>👻 <a href="https://github.com/facebook/flipper/issues/2215" target="_blank" rel="external nofollow noopener noreferrer">Flipper 레포 이슈</a></p>
+<h2 id="2-FBSDK-빌드에러"><a href="#2-FBSDK-빌드에러" class="headerlink" title="2. FBSDK 빌드에러"></a>2. FBSDK 빌드에러</h2><p>Flipper 라는 산을 넘었어도, 혹시 빌드에 실패하셨나요?<br>제 경우에는 <strong>Facebook SDK</strong> 에서 빌드가 실패했습니다. fbsdk-share-kit 및 fbsdk-loginkit 관련해서 빌드 에러가 발생하였습니다.</p>
+<h2 id="3-Swift-Compiler-오류"><a href="#3-Swift-Compiler-오류" class="headerlink" title="3. Swift Compiler 오류"></a>3. Swift Compiler 오류</h2><p><img src="https://user-images.githubusercontent.com/29659112/117192358-98c07880-ae1c-11eb-8051-ddfebbfdac8e.png" alt="image"></p>
+<h2 id="4-기타-잡다한-모듈들-ld-에러-Linking-error"><a href="#4-기타-잡다한-모듈들-ld-에러-Linking-error" class="headerlink" title="4. 기타 잡다한 모듈들 ld 에러(Linking error)"></a>4. 기타 잡다한 모듈들 ld 에러(Linking error)</h2><p>으악! 컴파일러의 망령이 내 퇴근을 막는다!! 👻👻👻</p>
+<h1 id="🍹-어떻게-해결하나요"><a href="#🍹-어떻게-해결하나요" class="headerlink" title="🍹 어떻게 해결하나요?"></a>🍹 어떻게 해결하나요?</h1><h2 id="1-Flipper-버전업"><a href="#1-Flipper-버전업" class="headerlink" title="1. Flipper 버전업"></a>1. Flipper 버전업</h2><p>🍒 <a href="https://github.com/facebook/react-native/issues/31480" target="_blank" rel="external nofollow noopener noreferrer">Xcode 12.5 troubleshooting guide (RN 0.62/0.63/0.64)/ #31480</a></p>
+<p>다행히 Xcode 12.5 릴리즈 일주일만에 해결책이 나왔습니다.</p>
+<p>잠깐! 현재 프로젝트에서 사용중인 React Native 의 버전을 꼭 확인하고, 해당 버전에 맞는 솔루션을 사용하세요.</p>
+<h3 id="RN-0-62"><a href="#RN-0-62" class="headerlink" title="RN 0.62"></a>RN 0.62</h3><p>Podfile의 <code>useFlipper!</code> 항목에 다음 내용을 추가합니다.<br><code>use_flipper!(&#39;Flipper&#39; =&gt; &#39;0.75.1&#39;, &#39;Flipper-Folly&#39; =&gt; &#39;2.5.3&#39;, &#39;Flipper-RSocket&#39; =&gt; &#39;1.3.1&#39;)</code></p>
+<p>그리고, 프로젝트 루트의 package.json 에서 React Native 버전을 올려주세요<br><code>&quot;react-native&quot;: &quot;0.62.3&quot;</code></p>
+<h3 id="RN-0-63"><a href="#RN-0-63" class="headerlink" title="RN 0.63"></a>RN 0.63</h3><p>Podfile의 <code>useFlipper!</code> 항목에 아래 내용만 추가해주면 됩니다.<br><code>use_flipper!(&#39;Flipper&#39; =&gt; &#39;0.75.1&#39;, &#39;Flipper-Folly&#39; =&gt; &#39;2.5.3&#39;, &#39;Flipper-RSocket&#39; =&gt; &#39;1.3.1&#39;)</code></p>
+<p>필요에 따라서 기존에 남은 Podfile 관련 캐시 및 RN캐시, Pods 폴더를 모두 지우고 다시 인스톨 하는 등의 과정이 필요할 수도 있습니다.</p>
+<h3 id="RN-0-64"><a href="#RN-0-64" class="headerlink" title="RN 0.64"></a>RN 0.64</h3><p>Podfile.lock 에 정의되어있는 Flipper 버전이 0.75보다 높은지, Flipper-polly 버전이 2.5.3보다 높은지 확인합니다. 만약 그렇지 않다면 Podfile 에 다음 내용을 추가해주세요.</p>
+<p><code>use_flipper!(&#39;Flipper&#39; =&gt; &#39;0.75.1&#39;, &#39;Flipper-Folly&#39; =&gt; &#39;2.5.3&#39;, &#39;Flipper-RSocket&#39; =&gt; &#39;1.3.1&#39;)</code></p>
+<p>그리고 프로젝트 루트에 있는 package.json에서 RN 버전을 다음과 같이 올려주세요.<br><code>&quot;react-native&quot;: &quot;0.64.1&quot;</code></p>
+<h2 id="2-React-Native-FBSDK-next-로-교체"><a href="#2-React-Native-FBSDK-next-로-교체" class="headerlink" title="2. React-Native-FBSDK-next 로 교체"></a>2. React-Native-FBSDK-next 로 교체</h2><p>react-native-fbsdk 패키지를 열어보면, 해당 패키지에서 사용하는 네이티브 코어 sdk 버전이 7.0 버전입니다. 현재 FBSDK 최신버전은 9.2 까지 올라와 있는 상황입니다.</p>
+<p>안타깝게도 현재 Facebook 측에서는 React Native SDK 에 대한 지원을 중단함을 바로 얼마 전에 선언했습니다.</p>
+<p>🧊 <a href="https://github.com/facebookarchive/react-native-fbsdk" target="_blank" rel="external nofollow noopener noreferrer">React Native Facebook SDK Git</a><br>🧊 <a href="https://developers.facebook.com/blog/post/2021/01/19/introducing-facebook-platform-sdk-version-9/" target="_blank" rel="external nofollow noopener noreferrer">Facebook Blog Post</a></p>
+<p>대신 커뮤니티에서 <a href="https://www.npmjs.com/package/react-native-fbsdk-next" target="_blank" rel="external nofollow noopener noreferrer">react-native-fbsdk-next</a> 라는 모듈을 이어받아서 계속해가고 있습니다. 이 모듈을 이용하면 최신 SDK 인 9.x 버전을 이용할 수 있습니다.</p>
+<p>모든 JS/TS 메소드는 동일합니다. 패키지만 교체하고, pod install 해주면 기존 소스코드 변경없이 이용 가능합니다.</p>
+<h2 id="3-시스템-껐다가-켜기"><a href="#3-시스템-껐다가-켜기" class="headerlink" title="3. 시스템 껐다가 켜기"></a>3. 시스템 껐다가 켜기</h2><p>놀랍게도, 이게 왜 되는지 모르겠지만, Swift Compiler 에러는 이걸로 해결이 된다고 합니다.</p>
+<p>모든 터미널을 끄고, 에뮬레이터를 끄고, Xcode 도 끄고, 마지막으로 시스템도 껐다가 다시 켜줍니다.</p>
+<p>아이고 세상에나..</p>
+<p>🍭 <a href="https://www.notion.so/XCode-12-5-53b6447a6f4a4908b20944bce50974cf#13407c0c4226438fbc523b8b48a21de3" target="_blank" rel="external nofollow noopener noreferrer">Build Fail on iOS</a></p>
+<h2 id="4-LD-에러해결"><a href="#4-LD-에러해결" class="headerlink" title="4. LD 에러해결"></a>4. LD 에러해결</h2><p>Xcode 12 버전에 들어오면서 발생한 이슈입니다.<br>일부 패키지에서 React pod을 참조하는것이 원인입니다.</p>
+<p>🤷🏼 <a href="https://github.com/facebook/react-native/issues/29633#issuecomment-694187116" target="_blank" rel="external nofollow noopener noreferrer">Build failed on XCode 12 beta4</a></p>
+<p>node_modules 폴더를 열어서 해당 패키지를 찾아들어간 뒤, <code>*.podspec</code> 확장자를 가진 파일을 열어줍니다.</p>
+<p>그 중, s.dependency 라인에 있는 <code>React</code> 디펜던시를 <code>React-Core</code> 로 수정해줍니다.</p>
+<p>예를들어서, 아래는 제가 사용중인 lottie-react-native 모듈의 Podspec 파일입니다. 해당 패키지는 최신버전인 4.x버전에서 이미 패치가 되었습니다만, 제가 사용중인 버전은 3.5.x 버전이라 패치가 수동으로 필요합니다.</p>
+<figure class="highlight podspec"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">require</span> <span class="string">'json'</span></span><br><span class="line"></span><br><span class="line">package = JSON.parse(File.read(File.join(__dir_<span class="number">_</span>, <span class="string">'package.json'</span>)))</span><br><span class="line"></span><br><span class="line">Pod::Spec.new <span class="keyword">do</span> <span class="params">|s|</span></span><br><span class="line">  s.name         = <span class="string">"lottie-react-native"</span></span><br><span class="line">  s.version      = package[<span class="string">'version'</span>]</span><br><span class="line">  s.summary      = <span class="string">"Lottie component for React Native (iOS and Android)"</span></span><br><span class="line"></span><br><span class="line">  s.authors      = &#123; <span class="string">"intelligibabble"</span> =&gt; <span class="string">"leland.m.richardson@gmail.com"</span> &#125;</span><br><span class="line">  s.homepage     = <span class="string">"https://github.com/airbnb/lottie-react-native#readme"</span></span><br><span class="line">  s.license      = package[<span class="string">'license'</span>]</span><br><span class="line">  s.platform     = <span class="symbol">:ios</span>, <span class="string">"9.0"</span></span><br><span class="line"></span><br><span class="line">  s.source       = &#123; <span class="symbol">:git</span> =&gt; <span class="string">"https://github.com/react-community/lottie-react-native.git"</span>, <span class="symbol">:tag</span> =&gt; <span class="string">"v<span class="subst">#&#123;s.version&#125;</span>"</span> &#125;</span><br><span class="line">  s.source_files  = <span class="string">"src/ios/**/*.&#123;h,m,swift&#125;"</span></span><br><span class="line">  s.swift_version = <span class="string">"5.0"</span></span><br><span class="line">  - s.dependency <span class="string">'React'</span>        &lt;-- 이 라인을</span><br><span class="line">  + s.dependency <span class="string">'React-Core'</span>   &lt;-- 이렇게 고쳐주세요</span><br><span class="line">  s.dependency <span class="string">'lottie-ios'</span>, <span class="string">'~&gt; 3.1.8'</span></span><br><span class="line"><span class="keyword">end</span></span><br></pre></td></tr></table></figure>
+<p>저명한 패키지들은 진작에 패치가 이루어 졌습니다만, 개발자가 손을 때었거나, 활발하게 사용되지 않는 패키지들은 새 버전 릴리즈까지 기다릴 수 없으니 patch-package 를 이용하여 덕테이프를 발라줍시다.</p>
+<h1 id="🗝-이도저도-안된다면…"><a href="#🗝-이도저도-안된다면…" class="headerlink" title="🗝 이도저도 안된다면…"></a>🗝 이도저도 안된다면…</h1><p>위 방법으로도 해결이 안되거나 할 수 없는 상황이라면 Xcode 를 다운그레이드 하는 방법만이 남았습니다.</p>
+<p><a href="https://developer.apple.com/download/more/" target="_blank" rel="external nofollow noopener noreferrer">Apple Download Center</a> 에 개발자 계정으로 로그인 한 뒤, Xcode 14.4.xip 파일을 다운로드 해줍니다.</p>
+<p>그 후, 압축 유틸리티를 이용해 풀어준 뒤, Applications 폴더에 던져주면 해결!</p>
+<h2 id="번외-Xcode-동시에-돌려쓰기"><a href="#번외-Xcode-동시에-돌려쓰기" class="headerlink" title="번외 - Xcode 동시에 돌려쓰기"></a>번외 - Xcode 동시에 돌려쓰기</h2><p>그러나, 언제까지나 오래된 에디터 및 컴파일러로 개발 할 수는 없습니다.<br>상황에 맞게 디버깅하고, 새 도구를 테스트 해야하는데, 몇십기가나 되는 Xcode를 매번 지웠다 다시 까는것도 번거로운 일입니다.</p>
+<p>다행히도, 바로 xcode-select 도구를 이용하면 Xcode 를 버전별로 여러개 설치해서 사용할 수 있습니다.</p>
+<p>먼저 이전에 다운로드해둔 Xcode.xip파일의 압출을 풀어서 나온 app 파일의 이름을 바꿔줍니다. 제 경우에는 <code>Xcode-12.4.app</code> 로 했습니다.</p>
+<p>그 뒤, 똑같이 Applications 폴더에 던져줍니다.</p>
+<p>마지막으로 터미널을 열어서 아래 명령어를 실행시켜줍니다.<br><code>sudo xcode-select -s /Applications/[바꾼 Xcode 이름].app/Contents/Developer</code></p>
+<p>현재 활성화된 버전을 확인하려면<br><code>xcode-select -p</code>로 확인할 수 있습니다.<br><img src="https://user-images.githubusercontent.com/29659112/117195644-7af51280-ae20-11eb-92f4-2514a791f984.png" alt="image"></p>
+<p>또는, RN 빌드에 사용되는 명령어인 xcodebuild 의 버전으로도 확인할 수 있습니다.<br><code>xcodebuild -v</code><br><img src="https://user-images.githubusercontent.com/29659112/117195705-8fd1a600-ae20-11eb-9999-6401f41c5e34.png" alt="image"></p>
+            
+
+
+        </div>
+    </div>
+    <div id="post-footer" class="post-footer main-content-wrap">
+        
+            <div class="post-footer-tags">
+                <span class="text-color-light text-small">태그</span><br>
+                
+    <a class="tag tag--primary tag--small t-link" href="/tags/React-Native/" rel="tag">React Native</a> <a class="tag tag--primary tag--small t-link" href="/tags/Xcode/" rel="tag">Xcode</a> <a class="tag tag--primary tag--small t-link" href="/tags/iOS/" rel="tag">iOS</a>
+
+            </div>
+        
+
+        <!-- 커스터마이징 해본 관련 글 영역-->
+        
+        
+        <!-- 끝 -->
+        
+        
+            <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    <a class="post-action-btn btn btn--disabled" aria-hidden="true">
+                        
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">이전</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a class="post-action-btn btn btn--default tooltip--top" href="/2020/08/15/Oracle_Cloud_%ED%94%84%EB%A6%AC%ED%8B%B0%EC%96%B4_%EC%82%AC%EC%9A%A9%ED%95%98%EA%B8%B0/" data-tooltip="Oracle Cloud 완전무료티어 이용하기" aria-label="다음: Oracle Cloud 완전무료티어 이용하기">
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">다음</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a class="post-action-btn btn btn--default btn-open-shareoptions" href="#btn-open-shareoptions" aria-label="이 포스트 공유하기">
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://www.facebook.com/sharer/sharer.php?u=https://zerogyun.dev/2021/05/06/Xcode-12-5%EC%97%90%EC%84%9C-React-Native-%EB%B9%8C%EB%93%9C%EC%97%90%EB%9F%AC-%ED%95%B4%EA%B2%B0%ED%95%98%EA%B8%B0/" title="Facebook에 공유하기" aria-label="Facebook에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://twitter.com/intent/tweet?text=https://zerogyun.dev/2021/05/06/Xcode-12-5%EC%97%90%EC%84%9C-React-Native-%EB%B9%8C%EB%93%9C%EC%97%90%EB%9F%AC-%ED%95%B4%EA%B2%B0%ED%95%98%EA%B8%B0/" title="Twitter에 공유하기" aria-label="Twitter에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://plus.google.com/share?url=https://zerogyun.dev/2021/05/06/Xcode-12-5%EC%97%90%EC%84%9C-React-Native-%EB%B9%8C%EB%93%9C%EC%97%90%EB%9F%AC-%ED%95%B4%EA%B2%B0%ED%95%98%EA%B8%B0/" title="Google+에 공유하기" aria-label="Google+에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+                <li class="post-action">
+                    <a class="post-action-btn btn btn--default" href="#disqus_thread" aria-label="댓글을 남겨주세요">
+                        <i class="fa fa-comment"></i>
+                    </a>
+                </li>
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="맨 위로">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+        
+        
+            
+                <div id="disqus_thread">
+    <noscript>Please enable JavaScript to view the <a href="//disqus.com/?ref_noscript" target="_blank" rel="noopener">comments powered by Disqus.</a></noscript>
+</div>
+            
+        
+    </div>
+</article>
+
+
+
+                <footer id="footer" class="main-content-wrap">
+    <span class="copyrights">
+        Copyrights &copy; 2021 zerogyun. All Rights Reserved.
+    </span>
+</footer>
+
+            </div>
+            
+                <div id="bottom-bar" class="post-bottom-bar" data-behavior="2">
+                    <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    <a class="post-action-btn btn btn--disabled" aria-hidden="true">
+                        
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">이전</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a class="post-action-btn btn btn--default tooltip--top" href="/2020/08/15/Oracle_Cloud_%ED%94%84%EB%A6%AC%ED%8B%B0%EC%96%B4_%EC%82%AC%EC%9A%A9%ED%95%98%EA%B8%B0/" data-tooltip="Oracle Cloud 완전무료티어 이용하기" aria-label="다음: Oracle Cloud 완전무료티어 이용하기">
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">다음</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a class="post-action-btn btn btn--default btn-open-shareoptions" href="#btn-open-shareoptions" aria-label="이 포스트 공유하기">
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://www.facebook.com/sharer/sharer.php?u=https://zerogyun.dev/2021/05/06/Xcode-12-5%EC%97%90%EC%84%9C-React-Native-%EB%B9%8C%EB%93%9C%EC%97%90%EB%9F%AC-%ED%95%B4%EA%B2%B0%ED%95%98%EA%B8%B0/" title="Facebook에 공유하기" aria-label="Facebook에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://twitter.com/intent/tweet?text=https://zerogyun.dev/2021/05/06/Xcode-12-5%EC%97%90%EC%84%9C-React-Native-%EB%B9%8C%EB%93%9C%EC%97%90%EB%9F%AC-%ED%95%B4%EA%B2%B0%ED%95%98%EA%B8%B0/" title="Twitter에 공유하기" aria-label="Twitter에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a class="post-action-btn btn btn--default" target="_blank" href="https://plus.google.com/share?url=https://zerogyun.dev/2021/05/06/Xcode-12-5%EC%97%90%EC%84%9C-React-Native-%EB%B9%8C%EB%93%9C%EC%97%90%EB%9F%AC-%ED%95%B4%EA%B2%B0%ED%95%98%EA%B8%B0/" title="Google+에 공유하기" aria-label="Google+에 공유하기" rel="external nofollow noopener noreferrer">
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+                <li class="post-action">
+                    <a class="post-action-btn btn btn--default" href="#disqus_thread" aria-label="댓글을 남겨주세요">
+                        <i class="fa fa-comment"></i>
+                    </a>
+                </li>
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="맨 위로">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+                </div>
+                
+    <div id="share-options-bar" class="share-options-bar" data-behavior="2">
+        <i id="btn-close-shareoptions" class="fa fa-times"></i>
+        <ul class="share-options">
+            
+                
+                
+                <li class="share-option">
+                    <a class="share-option-btn" target="_blank" href="https://www.facebook.com/sharer/sharer.php?u=https://zerogyun.dev/2021/05/06/Xcode-12-5%EC%97%90%EC%84%9C-React-Native-%EB%B9%8C%EB%93%9C%EC%97%90%EB%9F%AC-%ED%95%B4%EA%B2%B0%ED%95%98%EA%B8%B0/" aria-label="Facebook에 공유하기" rel="external nofollow noopener noreferrer">
+                        <i class="fab fa-facebook" aria-hidden="true"></i><span>Facebook에 공유하기</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a class="share-option-btn" target="_blank" href="https://twitter.com/intent/tweet?text=https://zerogyun.dev/2021/05/06/Xcode-12-5%EC%97%90%EC%84%9C-React-Native-%EB%B9%8C%EB%93%9C%EC%97%90%EB%9F%AC-%ED%95%B4%EA%B2%B0%ED%95%98%EA%B8%B0/" aria-label="Twitter에 공유하기" rel="external nofollow noopener noreferrer">
+                        <i class="fab fa-twitter" aria-hidden="true"></i><span>Twitter에 공유하기</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a class="share-option-btn" target="_blank" href="https://plus.google.com/share?url=https://zerogyun.dev/2021/05/06/Xcode-12-5%EC%97%90%EC%84%9C-React-Native-%EB%B9%8C%EB%93%9C%EC%97%90%EB%9F%AC-%ED%95%B4%EA%B2%B0%ED%95%98%EA%B8%B0/" aria-label="Google+에 공유하기" rel="external nofollow noopener noreferrer">
+                        <i class="fab fa-google-plus" aria-hidden="true"></i><span>Google+에 공유하기</span>
+                    </a>
+                </li>
+            
+        </ul>
+    </div>
+
+
+            
+        </div>
+        
+
+
+    
+        
+    
+
+<div id="about">
+    <div id="about-card">
+        <div id="about-btn-close">
+            <i class="fa fa-times"></i>
+        </div>
+        
+            <img id="about-card-picture" src="https://avatars1.githubusercontent.com/u/29659112?s=460&amp;v=4" alt="저자 이미지">
+        
+            <h4 id="about-card-name">zerogyun</h4>
+        
+            <div id="about-card-bio"><p>매일매일이 새로워!!</p>
+</div>
+        
+        
+            <div id="about-card-job">
+                <i class="fa fa-briefcase"></i>
+                <br>
+                <p>Student<br>Front-End Developer</p>
+
+            </div>
+        
+        
+            <div id="about-card-location">
+                <i class="fa fa-map-marker-alt"></i>
+                <br>
+                Seoul, South Korea
+            </div>
+        
+    </div>
+</div>
+
+        
+        
+<div id="cover" style="background-image:url('https://user-images.githubusercontent.com/29659112/76057866-1e009100-5fbe-11ea-84fe-00462e469e66.png');"></div>
+        <!--SCRIPTS-->
+
+<script src="/assets/js/script-cx4uxsmbxgefhnnq0d9brbw1kpc9uvxvmsgytoujypjb4vxuhnhniu1kzsc6.min.js"></script>
+
+<!--SCRIPTS END-->
+
+
+    
+        <script>
+          var disqus_config = function() {
+            this.page.url = 'https://zerogyun.dev/2021/05/06/Xcode-12-5%EC%97%90%EC%84%9C-React-Native-%EB%B9%8C%EB%93%9C%EC%97%90%EB%9F%AC-%ED%95%B4%EA%B2%B0%ED%95%98%EA%B8%B0/';
+              
+            this.page.identifier = '2021/05/06/Xcode-12-5에서-React-Native-빌드에러-해결하기/';
+              
+          };
+          (function() {
+            var d = document, s = d.createElement('script');
+            var disqus_shortname = 'cxz7720-github-io-1';
+            s.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+
+            s.setAttribute('data-timestamp', +new Date());
+            (d.head || d.body).appendChild(s);
+          })();
+        </script>
+    
+
+
+
+
+    </body>
+</html>
